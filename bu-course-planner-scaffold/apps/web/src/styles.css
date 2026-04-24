@@ -60,3 +60,243 @@ input, select, button, textarea {
   background: white;
   border-bottom: 1px solid #e2e8f0;
 }
+
+.builder-shell {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.builder-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.builder-toolbar h1,
+.builder-toolbar p,
+.builder-inspector h2,
+.builder-inspector p {
+  margin: 0;
+}
+
+.builder-toolbar p {
+  margin-top: 6px;
+  color: #475569;
+}
+
+.builder-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.builder-controls select,
+.builder-inspector select,
+.builder-inspector input {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: white;
+}
+
+.builder-controls select {
+  min-width: 260px;
+}
+
+.builder-alert,
+.builder-empty {
+  border: 1px solid #cbd5e1;
+  background: white;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.builder-alert.error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #991b1b;
+}
+
+.builder-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.builder-board-wrap {
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.builder-board-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.builder-board-header div {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.builder-board-header strong {
+  color: #0f172a;
+}
+
+.builder-board {
+  position: relative;
+  height: 760px;
+  min-width: 900px;
+  overflow: hidden;
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(#e2e8f0 1px, transparent 1px),
+    linear-gradient(90deg, #e2e8f0 1px, transparent 1px);
+  background-size: 36px 36px;
+  touch-action: none;
+}
+
+.course-node {
+  position: absolute;
+  width: 170px;
+  height: 112px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  text-align: left;
+  cursor: grab;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+  user-select: none;
+}
+
+.course-node:active {
+  cursor: grabbing;
+}
+
+.course-node.selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16), 0 12px 26px rgba(15, 23, 42, 0.1);
+}
+
+.course-code {
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.course-title {
+  overflow: hidden;
+  color: #334155;
+  font-size: 0.88rem;
+  line-height: 1.25;
+}
+
+.course-status {
+  justify-self: start;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.status-unset {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.status-planned {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-in-progress {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-waived {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.builder-inspector {
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+}
+
+.builder-inspector dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.builder-inspector dl div {
+  display: grid;
+  gap: 2px;
+}
+
+.builder-inspector dt {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.builder-inspector dd {
+  margin: 0;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+@media (max-width: 980px) {
+  .builder-toolbar,
+  .builder-workspace {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .builder-controls {
+    justify-content: start;
+  }
+
+  .builder-board-wrap {
+    overflow-x: auto;
+  }
+
+  .builder-inspector {
+    position: static;
+  }
+}

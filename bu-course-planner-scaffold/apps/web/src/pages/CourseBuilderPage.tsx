@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 
 type CourseStateStatus = "" | "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "WAIVED";
@@ -45,28 +45,6 @@ type UserCourseStateView = {
   };
 };
 
-type ScheduleEntryView = {
-  id: string;
-  offering?: {
-    id: string;
-    termCode?: string | null;
-    displayTitle?: string | null;
-    course?: {
-      courseCode: string;
-      title: string;
-    };
-  };
-};
-
-type SavedScheduleView = {
-  id: string;
-  title: string;
-  description?: string | null;
-  termCode?: string | null;
-  updatedAt?: string;
-  items?: ScheduleEntryView[];
-};
-
 type BuilderResponse = {
   user?: {
     id: string;
@@ -81,13 +59,27 @@ type BuilderResponse = {
     requirements: RequirementView[];
   } | null;
   userStates?: UserCourseStateView[];
-  savedSchedules?: SavedScheduleView[];
 };
 
 type DraftState = {
   status: CourseStateStatus;
   termCode: string;
 };
+
+type Position = {
+  x: number;
+  y: number;
+};
+
+type DragState = {
+  key: string;
+  offsetX: number;
+  offsetY: number;
+};
+
+const CARD_WIDTH = 170;
+const CARD_HEIGHT = 112;
+const BOARD_HEIGHT = 760;
 
 const STATUS_OPTIONS: { value: CourseStateStatus; label: string }[] = [
   { value: "", label: "Not set" },
@@ -101,35 +93,56 @@ function codeKey(courseCode?: string | null) {
   return (courseCode ?? "").replace(/\s+/g, "").toUpperCase();
 }
 
-function prettyStatus(status: CourseStateStatus) {
-  switch (status) {
-    case "PLANNED":
-      return "Planned";
-    case "IN_PROGRESS":
-      return "In Progress";
-    case "COMPLETED":
-      return "Completed";
-    case "WAIVED":
-      return "Waived";
-    default:
-      return "Not set";
-  }
+function getStatusClass(status: CourseStateStatus) {
+  return status ? `status-${status.toLowerCase().replace("_", "-")}` : "status-unset";
+}
+
+function getLayoutStorageKey(builder: BuilderResponse | null) {
+  const userId = builder?.user?.id ?? "anonymous";
+  const majorCode = builder?.major?.code ?? builder?.user?.majorCode ?? "no-major";
+  return `bu-course-builder-layout:${userId}:${majorCode}`;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function defaultPosition(index: number, recommendedTerm?: number | null): Position {
+  const term = recommendedTerm ?? Math.floor(index / 4) + 1;
+  const column = Math.max(0, term - 1);
+  const row = index % 4;
+
+  return {
+    x: 28 + column * 188,
+    y: 32 + row * 142,
+  };
+}
+
+function uniqueRequirements(requirements: RequirementView[]) {
+  const seen = new Set<string>();
+
+  return requirements.filter((req) => {
+    const key = codeKey(req.course?.courseCode) || req.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return !!req.course?.courseCode;
+  });
 }
 
 export function CourseBuilderPage() {
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+
   const [builder, setBuilder] = useState<BuilderResponse | null>(null);
   const [majors, setMajors] = useState<MajorLite[]>([]);
   const [selectedMajor, setSelectedMajor] = useState("");
   const [draftStates, setDraftStates] = useState<Record<string, DraftState>>({});
-  const [dirtyMap, setDirtyMap] = useState<Record<string, boolean>>({});
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("ALL");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [error, setError] = useState("");
+  const [positions, setPositions] = useState<Record<string, Position>>({});
+  const [selectedCourseKey, setSelectedCourseKey] = useState("");
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [savingMajor, setSavingMajor] = useState(false);
-  const [savingAll, setSavingAll] = useState(false);
-  const [savingCode, setSavingCode] = useState<string | null>(null);
+  const [savingCourse, setSavingCourse] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
@@ -146,9 +159,7 @@ export function CourseBuilderPage() {
         const builderData = builderRes.data;
         setBuilder(builderData);
         setMajors(majorsRes.data ?? []);
-
-        const initialMajor = builderData.user?.majorCode ?? builderData.major?.code ?? "";
-        setSelectedMajor(initialMajor);
+        setSelectedMajor(builderData.user?.majorCode ?? builderData.major?.code ?? "");
 
         const initialDrafts: Record<string, DraftState> = {};
         for (const state of builderData.userStates ?? []) {
@@ -157,9 +168,7 @@ export function CourseBuilderPage() {
             termCode: state.termCode ?? "",
           };
         }
-
         setDraftStates(initialDrafts);
-        setDirtyMap({});
       } catch (err: any) {
         setError(err.response?.data?.message ?? "Failed to load builder state.");
       }
@@ -168,65 +177,41 @@ export function CourseBuilderPage() {
     load();
   }, [reloadTick]);
 
-  const requirements = builder?.major?.requirements ?? [];
+  const requirements = useMemo(
+    () => uniqueRequirements(builder?.major?.requirements ?? []),
+    [builder?.major?.requirements]
+  );
 
-  const categories = useMemo(() => {
-    const values = new Set<string>();
-    for (const req of requirements) {
-      if (req.category) values.add(req.category);
-    }
-    return ["ALL", ...Array.from(values).sort()];
-  }, [requirements]);
+  const storageKey = useMemo(() => getLayoutStorageKey(builder), [builder]);
 
-  const filteredRequirements = useMemo(() => {
-    return requirements.filter((req) => {
-      const courseCode = req.course?.courseCode ?? "";
-      const title = req.course?.title ?? req.label ?? "";
-      const currentDraft = draftStates[codeKey(courseCode)];
-      const currentStatus = currentDraft?.status ?? "";
-
-      const matchesSearch =
-        !search ||
-        `${req.label} ${courseCode} ${title}`.toLowerCase().includes(search.toLowerCase());
-
-      const matchesCategory =
-        categoryFilter === "ALL" || req.category === categoryFilter;
-
-      const matchesStatus =
-        statusFilter === "ALL" || currentStatus === statusFilter;
-
-      return matchesSearch && matchesCategory && matchesStatus;
-    });
-  }, [requirements, draftStates, search, categoryFilter, statusFilter]);
-
-  const groupedRequirements = useMemo(() => {
-    const groups = new Map<string, RequirementView[]>();
-
-    for (const req of filteredRequirements) {
-      const label =
-        req.recommendedTerm != null
-          ? `Recommended Term ${req.recommendedTerm}`
-          : "Unscheduled / Flexible";
-
-      if (!groups.has(label)) groups.set(label, []);
-      groups.get(label)!.push(req);
+  useEffect(() => {
+    if (!builder?.major) {
+      setPositions({});
+      setSelectedCourseKey("");
+      return;
     }
 
-    return Array.from(groups.entries()).sort((a, b) => {
-      const aNum = Number(a[0].replace(/\D/g, "")) || 999;
-      const bNum = Number(b[0].replace(/\D/g, "")) || 999;
-      return aNum - bNum;
+    const saved = window.localStorage.getItem(storageKey);
+    const savedPositions = saved ? (JSON.parse(saved) as Record<string, Position>) : {};
+    const nextPositions: Record<string, Position> = {};
+
+    requirements.forEach((req, index) => {
+      const key = codeKey(req.course?.courseCode);
+      nextPositions[key] = savedPositions[key] ?? defaultPosition(index, req.recommendedTerm);
     });
-  }, [filteredRequirements]);
 
-  function getDraft(courseCode?: string | null): DraftState {
-    return draftStates[codeKey(courseCode)] ?? { status: "", termCode: "" };
-  }
+    setPositions(nextPositions);
+    setSelectedCourseKey((current) => current || codeKey(requirements[0]?.course?.courseCode));
+  }, [builder?.major, requirements, storageKey]);
 
-  function setDraft(courseCode: string, next: DraftState) {
-    const key = codeKey(courseCode);
-    setDraftStates((prev) => ({ ...prev, [key]: next }));
-    setDirtyMap((prev) => ({ ...prev, [key]: true }));
+  const selectedRequirement = useMemo(
+    () => requirements.find((req) => codeKey(req.course?.courseCode) === selectedCourseKey),
+    [requirements, selectedCourseKey]
+  );
+
+  function savePositions(nextPositions = positions) {
+    window.localStorage.setItem(storageKey, JSON.stringify(nextPositions));
+    setMessage("Layout saved.");
   }
 
   async function saveMajor() {
@@ -250,11 +235,15 @@ export function CourseBuilderPage() {
     }
   }
 
+  function updateDraft(courseCode: string, next: DraftState) {
+    setDraftStates((prev) => ({ ...prev, [codeKey(courseCode)]: next }));
+  }
+
   async function saveCourseState(courseCode: string) {
     const key = codeKey(courseCode);
     const draft = draftStates[key] ?? { status: "", termCode: "" };
 
-    setSavingCode(key);
+    setSavingCourse(true);
     setError("");
     setMessage("");
 
@@ -269,82 +258,86 @@ export function CourseBuilderPage() {
         });
       }
 
-      setDirtyMap((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-
       setMessage(`Saved ${courseCode}.`);
       setReloadTick((x) => x + 1);
     } catch (err: any) {
       setError(err.response?.data?.message ?? `Failed to save ${courseCode}.`);
     } finally {
-      setSavingCode(null);
+      setSavingCourse(false);
     }
   }
 
-  async function saveAllChanges() {
-    const dirtyCodes = Object.keys(dirtyMap);
-    if (dirtyCodes.length === 0) {
-      setMessage("No unsaved changes.");
-      return;
-    }
-
-    setSavingAll(true);
-    setError("");
-    setMessage("");
-
-    try {
-      for (const key of dirtyCodes) {
-        const req = requirements.find((r) => codeKey(r.course?.courseCode) === key);
-        const courseCode = req?.course?.courseCode;
-        if (!courseCode) continue;
-
-        const draft = draftStates[key] ?? { status: "", termCode: "" };
-        if (!draft.status) {
-          await api.delete(`/planner/course-state/${encodeURIComponent(courseCode)}`);
-        } else {
-          await api.put("/planner/course-state", {
-            courseCode,
-            status: draft.status,
-            termCode: draft.termCode || undefined,
-          });
-        }
-      }
-
-      setDirtyMap({});
-      setMessage("All changes saved.");
-      setReloadTick((x) => x + 1);
-    } catch (err: any) {
-      setError(err.response?.data?.message ?? "Failed to save all changes.");
-    } finally {
-      setSavingAll(false);
-    }
+  function resetLayout() {
+    const nextPositions: Record<string, Position> = {};
+    requirements.forEach((req, index) => {
+      nextPositions[codeKey(req.course?.courseCode)] = defaultPosition(index, req.recommendedTerm);
+    });
+    setPositions(nextPositions);
+    savePositions(nextPositions);
   }
 
-  const savedSchedules = builder?.savedSchedules ?? [];
+  function startDrag(event: PointerEvent<HTMLButtonElement>, key: string) {
+    if (!boardRef.current) return;
+
+    const position = positions[key];
+    const boardRect = boardRef.current.getBoundingClientRect();
+
+    dragRef.current = {
+      key,
+      offsetX: event.clientX - boardRect.left - position.x,
+      offsetY: event.clientY - boardRect.top - position.y,
+    };
+
+    setSelectedCourseKey(key);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveDrag(event: PointerEvent<HTMLButtonElement>) {
+    const drag = dragRef.current;
+    const board = boardRef.current;
+    if (!drag || !board) return;
+
+    const boardRect = board.getBoundingClientRect();
+    const nextX = clamp(event.clientX - boardRect.left - drag.offsetX, 12, boardRect.width - CARD_WIDTH - 12);
+    const nextY = clamp(event.clientY - boardRect.top - drag.offsetY, 12, BOARD_HEIGHT - CARD_HEIGHT - 12);
+
+    setPositions((prev) => ({
+      ...prev,
+      [drag.key]: { x: nextX, y: nextY },
+    }));
+  }
+
+  function endDrag(event: PointerEvent<HTMLButtonElement>) {
+    if (!dragRef.current) return;
+
+    dragRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+
+    setPositions((current) => {
+      window.localStorage.setItem(storageKey, JSON.stringify(current));
+      return current;
+    });
+    setMessage("Layout saved.");
+  }
+
+  const selectedCourse = selectedRequirement?.course;
+  const selectedDraft = draftStates[selectedCourseKey] ?? { status: "", termCode: "" };
 
   return (
-    <main className="container stack">
-      <div className="card stack">
-        <h1>Course Builder</h1>
-        <p>
-          Choose your major, mark courses as completed or planned, and persist your
-          builder state to the database.
-        </p>
-      </div>
+    <main className="builder-shell">
+      <section className="builder-toolbar">
+        <div>
+          <h1>Course Builder</h1>
+          <p>
+            Arrange your current major requirements into a plan and save course status as you go.
+          </p>
+        </div>
 
-      {error && <div className="card">{error}</div>}
-      {message && <div className="card">{message}</div>}
-
-      <div className="card stack">
-        <h2>Major</h2>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <div className="builder-controls">
           <select
             value={selectedMajor}
-            onChange={(e) => setSelectedMajor(e.target.value)}
-            style={{ minWidth: 260 }}
+            onChange={(event) => setSelectedMajor(event.target.value)}
+            aria-label="Major"
           >
             <option value="">Select a major</option>
             {majors.map((major) => (
@@ -353,200 +346,158 @@ export function CourseBuilderPage() {
               </option>
             ))}
           </select>
-
-          <button onClick={saveMajor} disabled={savingMajor}>
+          <button className="btn" onClick={saveMajor} disabled={savingMajor}>
             {savingMajor ? "Saving..." : "Save Major"}
           </button>
-        </div>
-
-        {builder?.major && (
-          <div>
-            <strong>Loaded major:</strong> {builder.major.name} ({builder.major.code})
-          </div>
-        )}
-      </div>
-
-      {savedSchedules.length > 0 && (
-        <div className="card stack">
-          <h2>Previously Saved Schedules</h2>
-          {savedSchedules.map((schedule) => (
-            <div
-              key={schedule.id}
-              style={{
-                border: "1px solid #ddd",
-                borderRadius: 12,
-                padding: 12,
-              }}
-            >
-              <div>
-                <strong>{schedule.title}</strong>
-                {schedule.termCode ? ` · ${schedule.termCode}` : ""}
-              </div>
-              {schedule.description && <div>{schedule.description}</div>}
-              {schedule.items?.length ? (
-                <ul style={{ marginTop: 8 }}>
-                  {schedule.items.map((item) => (
-                    <li key={item.id}>
-                      {item.offering?.course?.courseCode}{" "}
-                      {item.offering?.course?.title}
-                      {item.offering?.displayTitle ? ` · ${item.offering.displayTitle}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div style={{ marginTop: 8 }}>No sections saved yet.</div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="card stack">
-        <h2>Filters</h2>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <input
-            placeholder="Search by course code, title, or label"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ minWidth: 280 }}
-          />
-
-          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="ALL">All statuses</option>
-            {STATUS_OPTIONS.filter((x) => x.value).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-
-          <button onClick={saveAllChanges} disabled={savingAll}>
-            {savingAll ? "Saving..." : "Save All Changes"}
+          <button className="btn secondary" onClick={() => savePositions()} disabled={!builder?.major}>
+            Save Layout
+          </button>
+          <button className="btn secondary" onClick={resetLayout} disabled={!builder?.major}>
+            Reset Layout
           </button>
         </div>
-      </div>
+      </section>
 
-      {!builder?.major && (
-        <div className="card">
-          Select and save a major to load your course builder requirements.
-        </div>
-      )}
+      {error && <div className="builder-alert error">{error}</div>}
+      {message && <div className="builder-alert">{message}</div>}
 
-      {groupedRequirements.map(([groupLabel, reqs]) => (
-        <section key={groupLabel} className="stack">
-          <div className="card">
-            <h2>{groupLabel}</h2>
+      {!builder?.major ? (
+        <section className="builder-empty">
+          Select and save a major to load draggable course boxes.
+        </section>
+      ) : (
+        <section className="builder-workspace">
+          <div className="builder-board-wrap">
+            <div className="builder-board-header">
+              <div>
+                <strong>{builder.major.name}</strong>
+                <span>{requirements.length} requirements</span>
+              </div>
+              <span>Drag boxes anywhere on the board.</span>
+            </div>
+
+            <div className="builder-board" ref={boardRef}>
+              {requirements.map((req) => {
+                const course = req.course!;
+                const key = codeKey(course.courseCode);
+                const position = positions[key] ?? defaultPosition(0, req.recommendedTerm);
+                const draft = draftStates[key] ?? { status: "", termCode: "" };
+
+                return (
+                  <button
+                    key={req.id}
+                    type="button"
+                    className={`course-node ${selectedCourseKey === key ? "selected" : ""}`}
+                    style={{ left: position.x, top: position.y }}
+                    onPointerDown={(event) => startDrag(event, key)}
+                    onPointerMove={moveDrag}
+                    onPointerUp={endDrag}
+                    onPointerCancel={endDrag}
+                  >
+                    <span className="course-code">{course.courseCode}</span>
+                    <span className="course-title">{course.title}</span>
+                    <span className={`course-status ${getStatusClass(draft.status)}`}>
+                      {draft.status ? draft.status.replace("_", " ") : "NOT SET"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {reqs.map((req) => {
-            const course = req.course;
-            const courseCode = course?.courseCode ?? "";
-            const key = codeKey(courseCode);
-            const draft = getDraft(courseCode);
-            const dirty = !!dirtyMap[key];
-            const prereqText =
-              course?.prerequisites?.length
-                ? course.prerequisites
-                    .map((p) =>
-                      `${p.prereq?.courseCode ?? "Unknown prereq"}${p.isCoreq ? " (co-req)" : ""}`
-                    )
-                    .join(", ")
-                : "None";
-
-            const hubText =
-              course?.hubAreas?.length
-                ? course.hubAreas
-                    .map((h) => h.hubArea?.code ?? h.hubArea?.label)
-                    .filter(Boolean)
-                    .join(", ")
-                : "—";
-
-            return (
-              <div className="card stack" key={req.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                  <div className="stack" style={{ flex: 1 }}>
-                    <strong>{req.label}</strong>
-                    <div>
-                      {course?.courseCode} {course?.title}
-                    </div>
-                    <div>Category: {req.category}</div>
-                    <div>Recommended term: {req.recommendedTerm ?? "—"}</div>
-                    <div>Required: {req.isRequired === false ? "No" : "Yes"}</div>
-                    <div>Prerequisites: {prereqText}</div>
-                    <div>Hub areas: {hubText}</div>
-                  </div>
-
-                  <div
-                    className="stack"
-                    style={{
-                      minWidth: 260,
-                      borderLeft: "1px solid #ddd",
-                      paddingLeft: 12,
-                    }}
-                  >
-                    <label>
-                      <div>Status</div>
-                      <select
-                        value={draft.status}
-                        onChange={(e) =>
-                          setDraft(courseCode, {
-                            ...draft,
-                            status: e.target.value as CourseStateStatus,
-                          })
-                        }
-                      >
-                        {STATUS_OPTIONS.map((option) => (
-                          <option key={option.label} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    {(draft.status === "PLANNED" || draft.status === "IN_PROGRESS") && (
-                      <label>
-                        <div>Planned / Current Term</div>
-                        <input
-                          placeholder="e.g. 2026FA"
-                          value={draft.termCode}
-                          onChange={(e) =>
-                            setDraft(courseCode, {
-                              ...draft,
-                              termCode: e.target.value,
-                            })
-                          }
-                        />
-                      </label>
-                    )}
-
-                    <div>
-                      Current selection: <strong>{prettyStatus(draft.status)}</strong>
-                      {draft.termCode ? ` · ${draft.termCode}` : ""}
-                    </div>
-
-                    <button
-                      onClick={() => saveCourseState(courseCode)}
-                      disabled={!courseCode || savingCode === key}
-                    >
-                      {savingCode === key ? "Saving..." : dirty ? "Save Changes" : "Save"}
-                    </button>
-
-                    {dirty && <div>Unsaved changes</div>}
-                  </div>
+          <aside className="builder-inspector">
+            {selectedCourse && selectedRequirement ? (
+              <>
+                <div>
+                  <h2>{selectedCourse.courseCode}</h2>
+                  <p>{selectedCourse.title}</p>
                 </div>
-              </div>
-            );
-          })}
+
+                <dl>
+                  <div>
+                    <dt>Requirement</dt>
+                    <dd>{selectedRequirement.label}</dd>
+                  </div>
+                  <div>
+                    <dt>Category</dt>
+                    <dd>{selectedRequirement.category}</dd>
+                  </div>
+                  <div>
+                    <dt>Recommended term</dt>
+                    <dd>{selectedRequirement.recommendedTerm ?? "Flexible"}</dd>
+                  </div>
+                  <div>
+                    <dt>Prerequisites</dt>
+                    <dd>
+                      {selectedCourse.prerequisites?.length
+                        ? selectedCourse.prerequisites
+                            .map((prereq) =>
+                              `${prereq.prereq?.courseCode ?? "Unknown"}${prereq.isCoreq ? " coreq" : ""}`
+                            )
+                            .join(", ")
+                        : "None"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Hub areas</dt>
+                    <dd>
+                      {selectedCourse.hubAreas?.length
+                        ? selectedCourse.hubAreas
+                            .map((area) => area.hubArea?.code ?? area.hubArea?.label)
+                            .filter(Boolean)
+                            .join(", ")
+                        : "None"}
+                    </dd>
+                  </div>
+                </dl>
+
+                <label className="field">
+                  <span>Status</span>
+                  <select
+                    value={selectedDraft.status}
+                    onChange={(event) =>
+                      updateDraft(selectedCourse.courseCode, {
+                        ...selectedDraft,
+                        status: event.target.value as CourseStateStatus,
+                      })
+                    }
+                  >
+                    {STATUS_OPTIONS.map((option) => (
+                      <option key={option.label} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field">
+                  <span>Term</span>
+                  <input
+                    placeholder="2026FA"
+                    value={selectedDraft.termCode}
+                    onChange={(event) =>
+                      updateDraft(selectedCourse.courseCode, {
+                        ...selectedDraft,
+                        termCode: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+
+                <button
+                  className="btn"
+                  onClick={() => saveCourseState(selectedCourse.courseCode)}
+                  disabled={savingCourse}
+                >
+                  {savingCourse ? "Saving..." : "Save Course"}
+                </button>
+              </>
+            ) : (
+              <p>Select a course box to edit it.</p>
+            )}
+          </aside>
         </section>
-      ))}
+      )}
     </main>
   );
 }

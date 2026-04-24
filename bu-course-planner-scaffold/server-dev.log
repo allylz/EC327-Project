@@ -1,0 +1,5 @@
+
+> @bu-planner/server@0.1.0 dev
+> tsx watch src/index.ts
+
+Server listening on port 4000

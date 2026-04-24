@@ -45,17 +45,15 @@ export class PlannerService {
 
     const savedSchedules = await prisma.schedule.findMany({
       where: { userId },
-      include: {
-        items: {
-          include: {
-            offering: {
-              include: {
-                course: true,
+        include: {
+          entries: {
+            include: {
+              offering: {
+                include: { course: true },
               },
             },
           },
         },
-      },
       orderBy: { updatedAt: "desc" },
       take: 5,
     });

@@ -1,51 +1,140 @@
 import { prisma } from "../../db/prisma";
-import { AppError } from "../../lib/errors";
-import { hubRecommendationService } from "./hub-recommendation.service";
-import { prerequisiteService } from "./prerequisite.service";
-import { schedulerService } from "./scheduler.service";
 
 export class PlannerService {
   async getCourseBuilderState(userId: string) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.majorCode) throw new AppError("User major not set", 400);
-
-    const major = await prisma.major.findUnique({
-      where: { code: user.majorCode },
-      include: {
-        requirements: {
-          include: {
-            course: {
-              include: {
-                prerequisites: { include: { prereq: true } },
-                hubAreas: { include: { hubArea: true } },
-              },
-            },
-          },
-          orderBy: { recommendedTerm: "asc" },
-        },
-      },
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
     });
 
-    if (!major) throw new AppError("Major not found", 404);
+    if (!user) throw new Error("User not found");
+
+    const major = user.majorCode
+      ? await prisma.major.findUnique({
+          where: { code: user.majorCode },
+          include: {
+            requirements: {
+              include: {
+                course: {
+                  include: {
+                    prerequisites: {
+                      include: {
+                        prereq: true,
+                      },
+                    },
+                    hubAreas: {
+                      include: {
+                        hubArea: true,
+                      },
+                    },
+                  },
+                },
+              },
+              orderBy: [{ recommendedTerm: "asc" }, { label: "asc" }],
+            },
+          },
+        })
+      : null;
 
     const userStates = await prisma.userCourseState.findMany({
       where: { userId },
-      include: { course: true },
+      include: {
+        course: true,
+      },
+      orderBy: { updatedAt: "desc" },
     });
 
-    return { major, userStates };
+    const savedSchedules = await prisma.schedule.findMany({
+      where: { userId },
+      include: {
+        items: {
+          include: {
+            offering: {
+              include: {
+                course: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+    });
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        majorCode: user.majorCode,
+      },
+      major,
+      userStates,
+      savedSchedules,
+    };
   }
 
-  async generateSemesterOptions(userId: string, termCode: string, maxUnits = 18) {
-    const builderState = await this.getCourseBuilderState(userId);
-    const eligibleRequiredCourses = prerequisiteService.getEligibleRequiredCourses(builderState);
-    const scheduleCandidates = await schedulerService.findFittingEngineeringSchedules(eligibleRequiredCourses, termCode, maxUnits);
+  async updateMajor(userId: string, majorCode: string) {
+    const major = await prisma.major.findUnique({
+      where: { code: majorCode },
+    });
 
-    return Promise.all(
-      scheduleCandidates.map((candidate) =>
-        hubRecommendationService.fillRemainingSlotsWithHubCourses(userId, termCode, candidate, maxUnits)
-      )
-    );
+    if (!major) throw new Error("Major not found");
+
+    return prisma.user.update({
+      where: { id: userId },
+      data: { majorCode },
+    });
+  }
+
+  async upsertCourseState(
+    userId: string,
+    input: {
+      courseCode: string;
+      status: "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "WAIVED";
+      termCode?: string;
+    }
+  ) {
+    const course = await prisma.course.findUnique({
+      where: { courseCode: input.courseCode },
+    });
+
+    if (!course) {
+      throw new Error(`Course not found: ${input.courseCode}`);
+    }
+
+    return prisma.userCourseState.upsert({
+      where: {
+        userId_courseId: {
+          userId,
+          courseId: course.id,
+        },
+      },
+      update: {
+        status: input.status,
+        termCode: input.termCode,
+      },
+      create: {
+        userId,
+        courseId: course.id,
+        status: input.status,
+        termCode: input.termCode,
+      },
+    });
+  }
+
+  async deleteCourseState(userId: string, courseCode: string) {
+    const course = await prisma.course.findUnique({
+      where: { courseCode },
+    });
+
+    if (!course) return;
+
+    await prisma.userCourseState.deleteMany({
+      where: {
+        userId,
+        courseId: course.id,
+      },
+    });
   }
 }
 

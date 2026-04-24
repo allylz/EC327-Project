@@ -165,7 +165,8 @@ model UserCourseState {
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
-  @@unique([userId, courseId])
+  @@unique([userId, courseId], name: "userId_courseId")
+  
 }
 
 model Schedule {

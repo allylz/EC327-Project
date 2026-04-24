@@ -1,0 +1,22 @@
+export const HUB_CODES = [
+  "PLM",
+  "AEX",
+  "HCO",
+  "SO",
+  "IIC",
+  "GCI",
+  "ETR",
+  "QR1",
+  "QR2",
+  "SI1",
+  "SI2",
+  "FYW",
+  "WRI",
+  "WIN",
+  "OSC",
+  "DME",
+  "CRT",
+  "RIL",
+  "TWC",
+  "CRI"
+] as const;

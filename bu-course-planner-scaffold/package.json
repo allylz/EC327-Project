@@ -1,0 +1,17 @@
+{
+  "name": "bu-course-planner-scaffold",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:server": "npm --workspace @bu-planner/server run dev",
+    "dev:web": "npm --workspace @bu-planner/web run dev",
+    "build": "npm run build -w @bu-planner/shared && npm run build -w @bu-planner/server && npm run build -w @bu-planner/web",
+    "prisma:generate": "npm --workspace @bu-planner/server run prisma:generate",
+    "prisma:migrate": "npm --workspace @bu-planner/server run prisma:migrate",
+    "seed": "npm --workspace @bu-planner/server run seed"
+  }
+}

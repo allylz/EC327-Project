@@ -224,6 +224,33 @@ app.get("/health", (_req, res) => {
 // -------------------------
 // Auth
 // -------------------------
+app.post("/api/test-email", async (req, res) => {
+  try {
+    const { to } = req.body;
+
+    if (!to) {
+      return res.status(400).json({
+        error: "Missing to email.",
+      });
+    }
+
+    await sendVerificationEmail(to, "123456");
+
+    res.json({
+      message: "Test email sent through current email provider.",
+      provider: process.env.EMAIL_PROVIDER || "unknown",
+      to,
+    });
+  } catch (err) {
+    console.error("Test email error:", err);
+
+    res.status(500).json({
+      error: "Failed to send test email.",
+      detail: err.message,
+    });
+  }
+});
+
 
 app.post("/api/auth/register", async (req, res) => {
   try {

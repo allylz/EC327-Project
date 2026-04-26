@@ -587,8 +587,16 @@ app.post("/api/schedules", requireAuth, async (req, res) => {
       });
     }
 
-    const schedule = await prisma.schedule.create({
-      data: {
+    const schedule = await prisma.schedule.upsert({
+      where: {
+        creatorId: req.session.userId,
+      },
+      update: {
+        title,
+        comments: comments || null,
+        terms,
+      },
+      create: {
         title,
         comments: comments || null,
         terms,
@@ -596,10 +604,44 @@ app.post("/api/schedules", requireAuth, async (req, res) => {
       },
     });
 
-    res.status(201).json(enrichSchedule(schedule));
+    res.status(200).json(enrichSchedule(schedule));
   } catch (err) {
-    console.error("Create schedule error:", err);
-    res.status(500).json({ error: "Could not create schedule." });
+    console.error("Create/update schedule error:", err);
+    res.status(500).json({
+      error: "Could not create or update schedule.",
+    });
+  }
+});
+
+app.get("/api/my-schedule", requireAuth, async (req, res) => {
+  try {
+    const schedule = await prisma.schedule.findUnique({
+      where: {
+        creatorId: req.session.userId,
+      },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!schedule) {
+      return res.json({ schedule: null });
+    }
+
+    res.json({
+      schedule: enrichSchedule(schedule),
+    });
+  } catch (err) {
+    console.error("Get my schedule error:", err);
+    res.status(500).json({
+      error: "Could not get your schedule.",
+    });
   }
 });
 

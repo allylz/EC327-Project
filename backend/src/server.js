@@ -101,15 +101,17 @@ async function sendVerificationEmail(email, code) {
   }
 
   const transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === "true",
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
     },
   });
 
   await transporter.sendMail({
-    from: `"BU Course Scheduler" <${process.env.EMAIL_USER}>`,
+    from: process.env.EMAIL_FROM || `"BU Course Scheduler" <${process.env.SMTP_USER}>`,
     to: email,
     subject: "Your BU Course Scheduler verification code",
     text: `Your verification code is: ${code}. This code expires in 10 minutes.`,

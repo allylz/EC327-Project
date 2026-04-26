@@ -93,35 +93,62 @@ function requireAuth(req, res, next) {
 }
 
 async function sendVerificationEmail(email, code) {
-  // For local testing, set SKIP_EMAIL=true in .env.
-  // Then the code will print in the terminal instead of sending.
+  console.log("---- EMAIL DEBUG START ----");
+
   if (process.env.SKIP_EMAIL === "true") {
+    console.log("SKIP_EMAIL=true, not sending real email.");
     console.log(`Verification code for ${email}: ${code}`);
+    console.log("---- EMAIL DEBUG END ----");
     return;
   }
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === "true",
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+  if (process.env.EMAIL_PROVIDER !== "resend") {
+    throw new Error("EMAIL_PROVIDER must be set to resend, or set SKIP_EMAIL=true.");
+  }
+
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("Missing RESEND_API_KEY in .env");
+  }
+
+  const fromAddress =
+    process.env.EMAIL_FROM || "BU Course Scheduler <onboarding@resend.dev>";
+
+  console.log("Sending email through Resend API...");
+  console.log("To:", email);
+  console.log("From:", fromAddress);
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({
+      from: fromAddress,
+      to: email,
+      subject: "Your BU Course Scheduler verification code",
+      text: `Your verification code is: ${code}. This code expires in 10 minutes.`,
+      html: `
+        <h2>BU Course Scheduler</h2>
+        <p>Your verification code is:</p>
+        <h1>${code}</h1>
+        <p>This code expires in 10 minutes.</p>
+      `,
+    }),
   });
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM || `"BU Course Scheduler" <${process.env.SMTP_USER}>`,
-    to: email,
-    subject: "Your BU Course Scheduler verification code",
-    text: `Your verification code is: ${code}. This code expires in 10 minutes.`,
-    html: `
-      <h2>BU Course Scheduler</h2>
-      <p>Your verification code is:</p>
-      <h1>${code}</h1>
-      <p>This code expires in 10 minutes.</p>
-    `,
-  });
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.error("Resend API failed:", data);
+    throw new Error(
+      `Resend email failed with status ${response.status}: ${JSON.stringify(data)}`
+    );
+  }
+
+  console.log("Email sent through Resend.");
+  console.log("Resend response:", data);
+  console.log("---- EMAIL DEBUG END ----");
 }
 
 function validateScheduleTerms(terms) {

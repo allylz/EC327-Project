@@ -3,7 +3,7 @@ import requests
 
 app = Flask(__name__)
 
-BACKEND_URL = "http://159.223.145.208:4000"
+BACKEND_URL = "http://localhost:4000"
 
 # One shared session for testing.
 # This keeps the backend login cookie after /api/auth/login.
@@ -799,4 +799,4 @@ def proxy(path):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(host="0.0.0.0", debug=True, port=5000)

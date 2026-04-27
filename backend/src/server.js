@@ -218,6 +218,8 @@ function enrichSchedule(schedule) {
       const hub = hubCourses[code] || null;
 
       return {
+          ...schedule,
+            terms: enrichedTerms,
         ...plannedCourse,
         course_code: code,
         course_title:
@@ -1035,7 +1037,7 @@ app.get("/api/schedules/:id", async (req, res) => {
 
 app.post("/api/schedules", requireAuth, async (req, res) => {
   try {
-    const { title, major, comments, terms } = req.body;
+    const { title, major, comments, terms, hub_unfulfilled } = req.body;
 
     if (!title || !terms) {
       return res.status(400).json({
@@ -1057,13 +1059,17 @@ app.post("/api/schedules", requireAuth, async (req, res) => {
       },
       update: {
         title,
+        major: major || null,
         comments: comments || null,
         terms,
+        hub_unfulfilled: Array.isArray(hub_unfulfilled) ? hub_unfulfilled : [],
       },
       create: {
         title,
+        major: major || null,
         comments: comments || null,
         terms,
+        hub_unfulfilled: Array.isArray(hub_unfulfilled) ? hub_unfulfilled : [],
         creatorId: req.session.userId,
       },
     });
@@ -1111,7 +1117,7 @@ app.get("/api/my-schedule", requireAuth, async (req, res) => {
 
 app.put("/api/schedules/:id", requireAuth, async (req, res) => {
   try {
-    const { title, major, comments, terms } = req.body;
+    const { title, major, comments, terms, hub_unfulfilled } = req.body;
 
     const schedule = await prisma.schedule.findUnique({
       where: {
@@ -1142,15 +1148,16 @@ app.put("/api/schedules/:id", requireAuth, async (req, res) => {
     }
 
     const updated = await prisma.schedule.update({
-    where: {
+     where: {
         id: req.params.id,
-    },
-    data: {
+      },
+      data: {
         title,
         major: major || null,
         comments,
         terms,
-    },
+        hub_unfulfilled: Array.isArray(hub_unfulfilled) ? hub_unfulfilled : [],
+      },
     });
     res.json(enrichSchedule(updated));
   } catch (err) {

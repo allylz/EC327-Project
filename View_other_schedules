@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BU Schedule Browser</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --red: #CC0000;
+    --red-light: #f5e5e5;
+    --red-mid: #e8b3b3;
+    --bg: #f7f5f2;
+    --surface: #ffffff;
+    --surface2: #f2f0ed;
+    --border: rgba(0,0,0,0.08);
+    --border-strong: rgba(0,0,0,0.14);
+    --text: #1a1a1a;
+    --text-2: #5a5a5a;
+    --text-3: #9a9a9a;
+    --green: #1a6b3c;
+    --green-light: #e6f4ec;
+    --blue: #1a4580;
+    --blue-light: #e6edf8;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--red);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .bu-wordmark {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: 20px;
+    color: #fff;
+    letter-spacing: -0.3px;
+  }
+
+  .bu-wordmark span {
+    opacity: 0.65;
+    font-weight: 300;
+    margin-left: 6px;
+    font-size: 15px;
+    letter-spacing: 0;
+  }
+
+  header .divider {
+    width: 1px;
+    height: 22px;
+    background: rgba(255,255,255,0.3);
+  }
+
+  header .page-label {
+    color: rgba(255,255,255,0.85);
+    font-size: 14px;
+    font-weight: 400;
+  }
+
+  /* ── Layout ── */
+  .page {
+    max-width: 1020px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+
+  .page-title {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+    margin-bottom: 4px;
+  }
+
+  .page-subtitle {
+    font-size: 14px;
+    color: var(--text-2);
+    margin-bottom: 28px;
+  }
+
+  /* ── Filter bar ── */
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+  }
+
+  .filters input,
+  .filters select {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .filters input { flex: 1; min-width: 200px; }
+  .filters select { cursor: pointer; }
+
+  .filters input:focus,
+  .filters select:focus {
+    border-color: var(--red);
+    box-shadow: 0 0 0 3px rgba(204,0,0,0.08);
+  }
+
+  .filters input::placeholder { color: var(--text-3); }
+
+  /* ── Status bar ── */
+  .status-bar {
+    font-size: 13px;
+    color: var(--text-3);
+    margin-bottom: 14px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* ── Cards ── */
+  .cards { display: flex; flex-direction: column; gap: 10px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .card:hover { border-color: var(--border-strong); }
+  .card.expanded { border-color: var(--border-strong); }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .card-header:hover { background: var(--bg); }
+
+  .avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--red-light);
+    color: var(--red);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    flex-shrink: 0;
+    border: 1px solid var(--red-mid);
+  }
+
+  .card-info { flex: 1; min-width: 0; }
+
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .card-meta {
+    font-size: 12px;
+    color: var(--text-3);
+    margin-top: 1px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .card-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .badge {
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .badge-major {
+    background: var(--blue-light);
+    color: var(--blue);
+    border: 1px solid rgba(26,69,128,0.15);
+  }
+
+  .badge-count {
+    background: var(--surface2);
+    color: var(--text-2);
+    border: 1px solid var(--border);
+    font-family: 'DM Mono', monospace;
+  }
+
+  .chevron {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-3);
+    transition: transform 0.2s;
+    font-size: 10px;
+  }
+
+  .chevron.open { transform: rotate(180deg); }
+
+  /* ── Card body ── */
+  .card-body {
+    border-top: 1px solid var(--border);
+    padding: 16px 18px;
+  }
+
+  .card-comments {
+    font-size: 13px;
+    color: var(--text-2);
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    font-style: italic;
+  }
+
+  .terms-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+  }
+
+  .term-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
+
+  .term-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 7px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .course-pill {
+    display: inline-block;
+    font-size: 11px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: 2px 3px 2px 0;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+  }
+
+  .hub-area-row {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .hub-tag {
+    font-size: 11px;
+    background: var(--green-light);
+    color: var(--green);
+    border: 1px solid rgba(26,107,60,0.18);
+    border-radius: 20px;
+    padding: 2px 9px;
+  }
+
+  /* ── Empty / loading ── */
+  .state-msg {
+    text-align: center;
+    padding: 52px 24px;
+    color: var(--text-3);
+    font-size: 14px;
+  }
+
+  .state-msg strong {
+    display: block;
+    font-size: 16px;
+    color: var(--text-2);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  .error-note {
+    background: var(--red-light);
+    color: var(--red);
+    border: 1px solid var(--red-mid);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 13px;
+    margin-bottom: 20px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bu-wordmark">Boston University <span>Course Planner</span></div>
+  <div class="divider"></div>
+  <div class="page-label">Public Schedules</div>
+</header>
+
+<div class="page">
+  <h1 class="page-title">Browse student schedules</h1>
+  <p class="page-subtitle">See what other BU students are planning and model your own path.</p>
+
+  <div id="errorNote" class="error-note"></div>
+
+  <div class="filters">
+    <input type="text" id="searchInput" placeholder="Search by name, title, or course code…" oninput="filterSchedules()" />
+    <select id="majorFilter" onchange="filterSchedules()">
+      <option value="">All majors</option>
+    </select>
+    <select id="termFilter" onchange="filterSchedules()">
+      <option value="">All terms</option>
+    </select>
+    <select id="sortBy" onchange="filterSchedules()">
+      <option value="newest">Newest first</option>
+      <option value="oldest">Oldest first</option>
+      <option value="name">Title A–Z</option>
+    </select>
+  </div>
+
+  <div id="statusBar" class="status-bar"></div>
+
+  <div id="loadingState" class="state-msg">
+    <strong>Loading schedules…</strong>
+    Fetching from backend
+  </div>
+
+  <div id="emptyState" class="state-msg" style="display:none;">
+    <strong>No results</strong>
+    Try adjusting your filters
+  </div>
+
+  <div id="cards" class="cards"></div>
+</div>
+
+<script>
+const BASE = 'https://auth.851216135.xyz';
+let allSchedules = [];
+let expanded = new Set();
+
+function initials(name) {
+  if (!name) return '?';
+  return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function termOrder(t) {
+  const s = { Spring: 0, Summer: 1, Fall: 2 };
+  const parts = t.split(' ');
+  return parseInt(parts[1] || 0) * 10 + (s[parts[0]] ?? 5);
+}
+
+function allCoursesInSchedule(s) {
+  return Object.values(s.terms || {}).flat();
+}
+
+function renderCard(s) {
+  const isOpen = expanded.has(s.id);
+  const courses = allCoursesInSchedule(s);
+  const terms = s.terms || {};
+  const sortedTerms = Object.keys(terms).sort((a, b) => termOrder(a) - termOrder(b));
+  const hubs = [...new Set(courses.flatMap(c => c.hub_areas || []))];
+
+  const bodyHtml = isOpen ? `
+    <div class="card-body">
+      ${s.comments ? `<div class="card-comments">"${s.comments}"</div>` : ''}
+      <div class="terms-grid">
+        ${sortedTerms.length ? sortedTerms.map(t => `
+          <div class="term-block">
+            <div class="term-label">${t}</div>
+            ${(terms[t] || []).length
+              ? terms[t].map(c => `<span class="course-pill" title="${c.course_title || ''}">${c.course_code}</span>`).join('')
+              : '<span style="font-size:11px;color:var(--text-3);">No courses</span>'}
+          </div>`).join('')
+        : '<span style="font-size:12px;color:var(--text-3);">No terms added yet</span>'}
+      </div>
+      ${hubs.length ? `<div class="hub-area-row">${hubs.map(h => `<span class="hub-tag">${h}</span>`).join('')}</div>` : ''}
+    </div>` : '';
+
+  return `
+    <div class="card${isOpen ? ' expanded' : ''}" id="card-${s.id}">
+      <div class="card-header" onclick="toggleCard('${s.id}')">
+        <div class="avatar">${initials(s.creator?.displayName)}</div>
+        <div class="card-info">
+          <div class="card-title">${s.title}</div>
+          <div class="card-meta">${s.creator?.displayName || 'Unknown'} · ${s.creator?.email || ''}</div>
+        </div>
+        <div class="card-right">
+          ${s.major ? `<span class="badge badge-major">${s.major}</span>` : ''}
+          <span class="badge badge-count">${courses.length} course${courses.length !== 1 ? 's' : ''}</span>
+          <div class="chevron${isOpen ? ' open' : ''}">▼</div>
+        </div>
+      </div>
+      ${bodyHtml}
+    </div>`;
+}
+
+function toggleCard(id) {
+  expanded.has(id) ? expanded.delete(id) : expanded.add(id);
+  renderVisible();
+}
+
+function getFiltered() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const major = document.getElementById('majorFilter').value;
+  const term = document.getElementById('termFilter').value;
+  const sort = document.getElementById('sortBy').value;
+
+  let res = allSchedules.filter(s => {
+    if (major && s.major !== major) return false;
+    if (term && !Object.keys(s.terms || {}).includes(term)) return false;
+    if (q) {
+      const courses = allCoursesInSchedule(s);
+      const matchCourse = courses.some(c =>
+        (c.course_code || '').toLowerCase().includes(q) ||
+        (c.course_title || '').toLowerCase().includes(q)
+      );
+      const matchMeta = (s.title || '').toLowerCase().includes(q) ||
+                        (s.creator?.displayName || '').toLowerCase().includes(q);
+      if (!matchCourse && !matchMeta) return false;
+    }
+    return true;
+  });
+
+  res.sort((a, b) => {
+    if (sort === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
+    if (sort === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
+    return (a.title || '').localeCompare(b.title || '');
+  });
+
+  return res;
+}
+
+function renderVisible() {
+  const results = getFiltered();
+  const cardsEl = document.getElementById('cards');
+  const emptyEl = document.getElementById('emptyState');
+  const statusEl = document.getElementById('statusBar');
+
+  emptyEl.style.display = results.length === 0 ? 'block' : 'none';
+  cardsEl.innerHTML = results.map(renderCard).join('');
+  statusEl.textContent = `${results.length} schedule${results.length !== 1 ? 's' : ''} shown` +
+    (allSchedules.length !== results.length ? ` of ${allSchedules.length}` : '');
+}
+
+function filterSchedules() { renderVisible(); }
+
+function populateFilters() {
+  const majors = [...new Set(allSchedules.map(s => s.major).filter(Boolean))].sort();
+  document.getElementById('majorFilter').innerHTML =
+    '<option value="">All majors</option>' +
+    majors.map(m => `<option value="${m}">${m}</option>`).join('');
+
+  const terms = new Set();
+  allSchedules.forEach(s => Object.keys(s.terms || {}).forEach(t => terms.add(t)));
+  const sortedTerms = [...terms].sort((a, b) => termOrder(a) - termOrder(b));
+  document.getElementById('termFilter').innerHTML =
+    '<option value="">All terms</option>' +
+    sortedTerms.map(t => `<option value="${t}">${t}</option>`).join('');
+}
+
+async function loadSchedules() {
+  try {
+    const res = await fetch(`${BASE}/api/schedules`, { credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    allSchedules = await res.json();
+    document.getElementById('loadingState').style.display = 'none';
+    populateFilters();
+    renderVisible();
+  } catch (e) {
+    document.getElementById('loadingState').style.display = 'none';
+    const errEl = document.getElementById('errorNote');
+    errEl.style.display = 'block';
+    errEl.textContent = `Could not load schedules: ${e.message}. Make sure the backend is running.`;
+    document.getElementById('statusBar').textContent = '';
+  }
+}
+
+loadSchedules();
+</script>
+</body>
+</html>

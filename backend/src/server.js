@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const dotenv = require("dotenv");
 const { PrismaClient } = require("@prisma/client");
+const { google } = require("googleapis");
 
 dotenv.config();
 
@@ -102,53 +103,31 @@ async function sendVerificationEmail(email, code) {
     return;
   }
 
-  if (process.env.EMAIL_PROVIDER !== "resend") {
-    throw new Error("EMAIL_PROVIDER must be set to resend, or set SKIP_EMAIL=true.");
+  if (process.env.EMAIL_PROVIDER !== "gmail_api") {
+    throw new Error("EMAIL_PROVIDER must be gmail_api, or set SKIP_EMAIL=true.");
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error("Missing RESEND_API_KEY in .env");
-  }
-
-  const fromAddress =
-    process.env.EMAIL_FROM || "BU Course Scheduler <onboarding@resend.dev>";
-
-  console.log("Sending email through Resend API...");
+  console.log("Sending email through Gmail API...");
   console.log("To:", email);
-  console.log("From:", fromAddress);
+  console.log("From:", process.env.GMAIL_FROM);
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: fromAddress,
-      to: email,
-      subject: "Your BU Course Scheduler verification code",
-      text: `Your verification code is: ${code}. This code expires in 10 minutes.`,
-      html: `
-        <h2>BU Course Scheduler</h2>
-        <p>Your verification code is:</p>
-        <h1>${code}</h1>
-        <p>This code expires in 10 minutes.</p>
-      `,
-    }),
+  const data = await sendWithGmailApi({
+    to: email,
+    subject: "Your BU Course Scheduler verification code",
+    text: `Your verification code is: ${code}. This code expires in 10 minutes.`,
+    html: `
+      <h2>BU Course Scheduler</h2>
+      <p>Your verification code is:</p>
+      <h1>${code}</h1>
+      <p>This code expires in 10 minutes.</p>
+    `,
   });
 
-  const data = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    console.error("Resend API failed:", data);
-    throw new Error(
-      `Resend email failed with status ${response.status}: ${JSON.stringify(data)}`
-    );
-  }
-
-  console.log("Email sent through Resend.");
-  console.log("Resend response:", data);
+  console.log("Email sent through Gmail API.");
+  console.log("Gmail response:", data);
   console.log("---- EMAIL DEBUG END ----");
+
+  return data;
 }
 
 function validateScheduleTerms(terms) {
@@ -224,6 +203,162 @@ app.get("/health", (_req, res) => {
 // -------------------------
 // Auth
 // -------------------------
+
+app.get("/api/gmail/auth", (req, res) => {
+  try {
+    const oauth2Client = getGmailOAuthClient();
+
+    const scopes = [
+      "https://www.googleapis.com/auth/gmail.send",
+    ];
+
+    const url = oauth2Client.generateAuthUrl({
+      access_type: "offline",
+      prompt: "consent",
+      scope: scopes,
+    });
+
+    res.redirect(url);
+  } catch (err) {
+    console.error("Gmail auth URL error:", err);
+    res.status(500).json({
+      error: "Could not create Gmail auth URL.",
+      detail: err.message,
+    });
+  }
+});
+
+app.get("/api/gmail/oauth2callback", async (req, res) => {
+  try {
+    const code = req.query.code;
+
+    if (!code) {
+      return res.status(400).send("Missing OAuth code.");
+    }
+
+    const oauth2Client = getGmailOAuthClient();
+
+    const { tokens } = await oauth2Client.getToken(code);
+
+    console.log("Gmail OAuth tokens:", tokens);
+
+    if (!tokens.refresh_token) {
+      return res.status(400).send(`
+        <h2>No refresh token returned</h2>
+        <p>Try visiting <code>/api/gmail/auth</code> again.</p>
+        <p>Make sure the auth URL uses <code>prompt: "consent"</code> and <code>access_type: "offline"</code>.</p>
+      `);
+    }
+
+    res.send(`
+      <h2>Gmail API connected</h2>
+      <p>Copy this refresh token into your backend <code>.env</code> file:</p>
+      <pre>GMAIL_REFRESH_TOKEN=${tokens.refresh_token}</pre>
+      <p>Then restart your backend.</p>
+    `);
+  } catch (err) {
+    console.error("Gmail OAuth callback error:", err);
+    res.status(500).send(`
+      <h2>Gmail OAuth failed</h2>
+      <pre>${err.message}</pre>
+    `);
+  }
+});
+
+function getGmailOAuthClient() {
+  if (!process.env.GMAIL_CLIENT_ID) {
+    throw new Error("Missing GMAIL_CLIENT_ID in .env");
+  }
+
+  if (!process.env.GMAIL_CLIENT_SECRET) {
+    throw new Error("Missing GMAIL_CLIENT_SECRET in .env");
+  }
+
+  if (!process.env.GMAIL_REDIRECT_URI) {
+    throw new Error("Missing GMAIL_REDIRECT_URI in .env");
+  }
+
+  return new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET,
+    process.env.GMAIL_REDIRECT_URI
+  );
+}
+
+function makeEmailRaw({ from, to, subject, text, html }) {
+  const boundary = "----=_Part_" + Date.now();
+
+  const messageParts = [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    text,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/html; charset=UTF-8",
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    html,
+    "",
+    `--${boundary}--`,
+  ];
+
+  const message = messageParts.join("\r\n");
+
+  return Buffer.from(message)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+async function sendWithGmailApi({ to, subject, text, html }) {
+  if (!process.env.GMAIL_REFRESH_TOKEN) {
+    throw new Error("Missing GMAIL_REFRESH_TOKEN in .env. Visit /api/gmail/auth first.");
+  }
+
+  const oauth2Client = getGmailOAuthClient();
+
+  oauth2Client.setCredentials({
+    refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+  });
+
+  const gmail = google.gmail({
+    version: "v1",
+    auth: oauth2Client,
+  });
+
+  const from = process.env.GMAIL_FROM || process.env.SMTP_USER;
+
+  if (!from) {
+    throw new Error("Missing GMAIL_FROM in .env");
+  }
+
+  const raw = makeEmailRaw({
+    from,
+    to,
+    subject,
+    text,
+    html,
+  });
+
+  const result = await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw,
+    },
+  });
+
+  return result.data;
+}
+
 app.post("/api/test-email", async (req, res) => {
   try {
     const { to } = req.body;

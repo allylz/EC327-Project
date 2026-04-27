@@ -1,14 +1,537 @@
-from flask import Flask, request, jsonify, render_template_string, session as flask_session
+from flask import Flask, request, jsonify, render_template_string, session as flask_session, redirect
+from datetime import timedelta
 import os
 import requests
 
 app = Flask(__name__)
 
-# Needed so Flask can store each browser user's backend cookie jar in a signed browser cookie.
+# Required so Flask can store each browser user's backend cookie jar in a signed browser cookie.
 # For real deployment, set FLASK_SECRET_KEY in your environment.
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-change-this-secret-key")
+app.permanent_session_lifetime = timedelta(days=7)
 
+# Your Node/Express backend. Keep 127.0.0.1 if Flask and Node run on the same VPS.
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:4000")
+
+
+# =============================================================================
+# Program planning sheet data, manually encoded from the uploaded BU ENG PPS PDFs.
+# =============================================================================
+
+TERM_LABELS = [
+    "Completed / Transferred",
+    "Required Courses",
+    "Freshman Fall",
+    "Freshman Spring",
+    "Freshman Summer",
+    "Sophomore Fall",
+    "Sophomore Spring",
+    "Sophomore Summer",
+    "Junior Fall",
+    "Junior Spring",
+    "Junior Summer",
+    "Senior Fall",
+    "Senior Spring",
+    "Senior Summer",
+    "Extra Semester",
+]
+
+MAJOR_DATA = {
+    "Electrical Engineering": {
+        "abbr": "EE",
+        "units": 131,
+        "required_plan": {
+            "Freshman Fall": [
+                ["CAS MA 123", "Calculus I"],
+                ["Natural Science Elective", "Choose from approved EE natural science list"],
+                ["ENG EK 100", "Freshman Seminar"],
+                ["ENG EK 125", "Programming for Engineers"],
+                ["CAS WR 120", "Writing Seminar"],
+            ],
+            "Freshman Spring": [
+                ["CAS MA 124", "Calculus II"],
+                ["CAS PY 211", "Physics I"],
+                ["ENG EK 131", "Introduction to Engineering"],
+                ["ENG EK 103", "Computational Linear Algebra"],
+                ["CAS WR 15x", "Writing, Research & Inquiry"],
+            ],
+            "Sophomore Fall": [
+                ["CAS MA 225", "Multivariable Calculus"],
+                ["CAS PY 212", "Physics II"],
+                ["ENG EK 307", "Electric Circuits"],
+                ["ENG EK 210", "Introduction to Engineering Design"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+            "Sophomore Spring": [
+                ["CAS MA 226", "Differential Equations"],
+                ["CAS PY 313", "Modern Physics"],
+                ["ENG EK 301", "Engineering Mechanics"],
+                ["ENG EK 381", "Probability, Statistics & Data Science"],
+            ],
+            "Junior Fall": [
+                ["ENG EC 455", "Electromagnetic Systems I"],
+                ["ENG EC 401", "Signals & Systems"],
+                ["ENG EC 410", "Introduction to Electronics"],
+                ["ENG EC 311", "Introduction to Logic Design"],
+            ],
+            "Junior Spring": [
+                ["EE Core Elective", "Choose EE core elective"],
+                ["EE Core Elective", "Choose EE core elective"],
+                ["EE Core Elective", "Choose EE core elective"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+            "Senior Fall": [
+                ["Computer Elective", "Choose approved computer elective"],
+                ["Technical Elective", "Choose approved technical elective"],
+                ["ENG EC 463", "Senior Design I"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+            "Senior Spring": [
+                ["Technical Elective", "Choose approved technical elective"],
+                ["Technical Elective", "Choose approved technical elective"],
+                ["ENG EC 464", "Senior Design II"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+        },
+        "dropdowns": {
+            "Natural Science Elective": [
+                "CAS AS 202 - Principles of Astronomy 1",
+                "CAS BI 107 - Biology 1",
+                "CAS BI 108 - Biology 2",
+                "CAS CH 101 - General Chemistry 1",
+                "CAS CH 131 - Gen Chem for the Eng Sci",
+                "CAS PY 451 - Quantum Physics 1",
+            ],
+            "EE Core Elective": [
+                "ENG EC 402 - Control System",
+                "ENG EC 414 - Machine Learning",
+                "ENG EC 415 - Software Radios",
+                "ENG EC 418 - Intro to Reinforcement Learning",
+                "ENG EC 501 - Dynamic System Theory",
+                "ENG EC 503 - Intro to Learning from Data",
+                "ENG EC 505 - Stochastic Processes",
+                "ENG EC 508 - Wireless Communication",
+                "ENG EC 515 - Digital Communication",
+                "ENG EC 516 - Digital Signals Processing",
+                "ENG EC 517 - Intro to Information Theory",
+                "ENG EC 519 - Speech Processing by Humans & Machn",
+                "ENG EC 520 - Digital Image Processing & Comm",
+                "ENG EC 522 - Computational Optical Imaging",
+                "ENG EC 523 - Deep Learning",
+                "ENG EC 524 - Optimization Theory & Methods",
+                "ENG EC 525 - Optimization for Machine Learning",
+                "ENG EC 534 - Discrete Stochastic Models",
+                "ENG EC 541 - Computer Communication Networks",
+                "ENG EC 412 - Analog Electronics",
+                "ENG EC 417 - Electric Energy Systems",
+                "ENG EC 571 - Digital VLSI Circuit Design",
+                "ENG EC 580 - Analog VLSI Circuit Design",
+                "ENG EC 582 - RF/Analog IC Design",
+                "ENG EC 583 - Power Electronics for Energy Systems",
+                "ENG EC 456 - Electromagnetic Systems II",
+                "ENG EC 471 - Physics of Semiconductor Devices",
+                "ENG EC 543 - Sustainable Power Systems",
+                "ENG EC 555 - Intro to Bio Optics",
+                "ENG EC 556 - Optical Spectroscopic Imaging",
+                "ENG EC 560 - Intro to Photonics",
+                "ENG EC 562 - Engineering Optics",
+                "ENG EC 565 - Electromagnetic Energy Trans",
+                "ENG EC 568 - Optical Fibers & Wave Guides",
+                "ENG EC 570 - Lasers & Applications",
+                "ENG EC 572 - Computational Methods in Mtls Sci",
+                "ENG EC 573 - Solar Energy Systems",
+                "ENG EC 574 - Physics of Semiconductor Materials",
+                "ENG EC 575 - Semiconductor Devices",
+                "ENG EC 577 - Electronic Optical & Magnetic Prop Mtls",
+                "ENG EC 578 - Fabrication Tech for Integrated Circuits",
+                "ENG EC 579 - Nano/microelectronic Device Technology",
+                "ENG EC 585 - Quantum ENG & Tech",
+                "ENG EC 591 - Photonics Laboratory I",
+                "ENG EK 481 - Intro to Nanotechnology",
+            ],
+            "Computer Elective": [
+                "ENG EC 327 - Intro Software Engineering",
+                "ENG EC 413 - Computer Organization",
+                "ENG EC 441 - Introduction to Computer Networking",
+            ],
+            "Technical Elective": [
+                "ENG BE 209 - Principles of Molecular Cell Biology and Biotechnology",
+                "CAS AS 414 - Solar and Space Physics",
+                "CAS CS 440 - Intro to Artificial Intelligence",
+                "CAS CS 480 - Introduction to Computer Graphics",
+                "CAS CS 585 - Image and Video Computing",
+                "CAS MA 511 - Introduction to Analysis",
+                "CAS MA 528 - Introduction to Modern Geometry",
+                "CAS MA 531 - Computability and Logic",
+                "CAS MA 541 - Modern Algebra 1",
+                "CAS MA 583 - Introduction to Stochastic Processes",
+                "CAS PY 451 - Quantum Physics 1",
+                "CAS PY 452 - Quantum Physics 2",
+                "Other approved ENG EC/BE/EK/ME 300+ course",
+            ],
+            "Hub Elective": ["Use Course Search to choose a Hub course"],
+        },
+    },
+
+    "Computer Engineering": {
+        "abbr": "CE",
+        "units": 133,
+        "required_plan": {
+            "Freshman Fall": [
+                ["CAS MA 123", "Calculus I"],
+                ["Natural Science Elective", "Choose from approved CE natural science list"],
+                ["ENG EK 100", "Freshman Seminar"],
+                ["ENG EK 125", "Programming for Engineers"],
+                ["CAS WR 120", "Writing Seminar"],
+            ],
+            "Freshman Spring": [
+                ["CAS MA 124", "Calculus II"],
+                ["CAS PY 211", "Physics I"],
+                ["ENG EK 131", "Introduction to Engineering"],
+                ["ENG EK 103", "Computational Linear Algebra"],
+                ["CAS WR 15x", "Writing, Research & Inquiry"],
+            ],
+            "Sophomore Fall": [
+                ["CAS MA 225", "Multivariable Calculus"],
+                ["CAS PY 212", "Physics II"],
+                ["ENG EK 307", "Electric Circuits"],
+                ["ENG EC 327", "Introduction to Software Engineering"],
+                ["CAS MA 193", "Intro Discrete Math"],
+            ],
+            "Sophomore Spring": [
+                ["CAS MA 226", "Differential Equations"],
+                ["ENG EC 311", "Introduction to Logic Design"],
+                ["ENG EK 301", "Engineering Mechanics"],
+                ["ENG EK 210", "Introduction to Engineering Design"],
+                ["ENG EC 330", "Applied Algebra for Engineering"],
+            ],
+            "Junior Fall": [
+                ["ENG EK 381", "Probability, Statistics & Data Science"],
+                ["ENG EC 413", "Computer Organization"],
+                ["CE Core Elective", "Choose approved CE core elective"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+            "Junior Spring": [
+                ["EE Breadth Elective", "Choose approved EE breadth elective"],
+                ["Computer Engineering Elective", "Choose approved CE elective"],
+                ["CE Core Elective", "Choose approved CE core elective"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+            "Senior Fall": [
+                ["Computer Engineering Elective", "Choose approved CE elective"],
+                ["Technical Elective", "Choose approved technical elective"],
+                ["ENG EC 463", "Senior Design I"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+            "Senior Spring": [
+                ["Technical Elective", "Choose approved technical elective"],
+                ["Technical Elective", "Choose approved technical elective"],
+                ["ENG EC 464", "Senior Design II"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+        },
+        "dropdowns": {
+            "Natural Science Elective": [
+                "CAS AS 202 - Principles of Astronomy 1",
+                "CAS BI 107 - Biology 1",
+                "CAS BI 108 - Biology 2",
+                "CAS CH 101 - General Chemistry 1",
+                "CAS CH 131 - Gen Chem for the Eng Sci",
+                "CAS PY 313 - Waves and Modern Physics",
+                "CAS PY 314 - Waves and Modern Physics (Grenoble)",
+                "CAS PY 321 & 322 - Thermal Physics & Quantum Physics",
+                "CAS PY 451 - Quantum Physics 1",
+            ],
+            "CE Core Elective": [
+                "ENG EC 401 - Signals and Systems",
+                "ENG EC 410 - Introduction to Electronics",
+                "ENG EC 440 - Introduction to Operating Systems",
+                "ENG EC 441 - Introduction to Computer Networking",
+                "ENG EC 444 - Smart and Connected Systems",
+            ],
+            "Computer Engineering Elective": [
+                "ENG EC 440 - Introduction to Operating Systems",
+                "ENG EC 441 - Intro to Computer Networking",
+                "ENG EC 444 - Smart & Connected Systems",
+                "ENG EC 447 - Software Design",
+                "ENG EC 504 - Advanced Data Structures",
+                "ENG EC 512 - Enterprise Client-Server Software System Design",
+                "ENG EC 513 - Computer Architecture",
+                "ENG EC 518 - Robot Learning",
+                "ENG EC 521 - Cybersecurity",
+                "ENG EC 526 - Parallel Programming for High Performance & Big Data",
+                "ENG EC 527 - High Performance Programming with Multicore & GPUs",
+                "ENG EC 528 - Cloud Computing",
+                "ENG EC 530 - Software Engineering Principles",
+                "ENG EC 531 - Full-Stack Software at Scale",
+                "ENG EC 535 - Introduction to Embedded Systems",
+                "ENG EC 541 - Computer Communications Networks",
+                "ENG EC 544 - Network Physical World",
+                "ENG EC 545 - Cyber Physical Systems",
+                "ENG EC 551 - Adv Digital Design w/ Verilog & FPGA",
+                "ENG EC 552 - Computational Synthetic Biology",
+                "ENG EC 571 - Digital VLSI Circuit Design",
+                "CAS CS 320 - Concepts of Programming Languages",
+                "CAS CS 350 - Fundamentals of Computing Systems",
+                "CAS CS 410 - Advanced Software Systems",
+                "CAS CS 411 - Software Engineering",
+                "CAS CS 505 - Natural Language Processing",
+                "CAS CS 511 - Formal Methods",
+                "CAS CS 525 - Compiler Design",
+                "CAS CS 530 - Advanced Algorithms",
+                "CAS CS 535 - Complexity Theory",
+                "CAS CS 538 - Fundamentals of Cryptography",
+                "CAS CS 548 - Cryptography",
+                "CAS CS 552 - Operating Systems",
+                "CAS CS 558 - Computer Network Security",
+                "CAS CS 562 - Database Applications",
+                "CAS CS 565 - Data Mining",
+            ],
+            "EE Breadth Elective": [
+                "ENG EC 401 - Signals and Systems",
+                "ENG EC 410 - Introduction to Electronics",
+                "ENG EC 455 - Electromagnetic Systems I",
+                "Any EE core elective except EC 541 and EC 571",
+            ],
+            "Technical Elective": [
+                "Any Computer Engineering Elective",
+                "ENG BE 209 - Principles of Molecular Cell Biology and Biotechnology",
+                "CAS AS 414 - Solar and Space Physics",
+                "CAS CS 440 - Intro to Artificial Intelligence",
+                "CAS CS 480 - Introduction to Computer Graphics",
+                "CAS CS 585 - Image and Video Computing",
+                "CAS MA 511 - Introduction to Analysis",
+                "CAS MA 528 - Introduction to Modern Geometry",
+                "CAS MA 531 - Computability and Logic",
+                "CAS MA 541 - Modern Algebra 1",
+                "CAS MA 583 - Introduction to Stochastic Processes",
+                "CAS PY 313 - Waves and Modern Physics",
+                "CAS PY 314 - Waves and Modern Physics",
+                "CAS PY 451 - Quantum Physics 1",
+                "CAS PY 452 - Quantum Physics 2",
+                "Other approved ENG EC/BE/EK/ME 300+ course",
+            ],
+            "Hub Elective": ["Use Course Search to choose a Hub course"],
+        },
+    },
+
+    "Mechanical Engineering": {
+        "abbr": "ME",
+        "units": 135,
+        "required_plan": {
+            "Freshman Fall": [
+                ["CAS MA 123", "Calculus I"],
+                ["CAS CH 131", "General Chemistry for Engineering"],
+                ["ENG EK 100", "Freshman Seminar"],
+                ["ENG EK 125", "Programming for Engineers"],
+                ["CAS WR 120", "Writing Seminar"],
+            ],
+            "Freshman Spring": [
+                ["CAS MA 124", "Calculus II"],
+                ["CAS PY 211", "Physics I"],
+                ["ENG EK 131", "Introduction to Engineering"],
+                ["ENG EK 103", "Computational Linear Algebra"],
+                ["CAS WR 15X", "Writing, Research & Inquiry"],
+            ],
+            "Sophomore Fall": [
+                ["CAS MA 225", "Multivariable Calculus"],
+                ["CAS PY 212", "Physics II"],
+                ["ENG EK 307", "Electric Circuits"],
+                ["ENG ME 357", "Intro to CAD"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+            "Sophomore Spring": [
+                ["CAS MA 226", "Differential Equations"],
+                ["ENG EK 381", "Probability, Statistics & Data Science"],
+                ["ENG EK 301", "Engineering Mechanics"],
+                ["ENG EK 210", "Introduction to Engineering Design"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+            "Junior Fall": [
+                ["ENG ME 304", "Energy & Thermodynamics"],
+                ["ENG ME 303", "Fluid Mechanics"],
+                ["ENG ME 305", "Mechanics of Materials"],
+                ["ENG ME 358", "Manufacturing Processes"],
+                ["ENG ME 306", "Materials Science"],
+            ],
+            "Junior Spring": [
+                ["Advanced Elective", "Choose approved advanced elective"],
+                ["ENG ME 310", "Measurements & Instrumentation"],
+                ["ENG ME 302", "Engineering Mechanics II"],
+                ["ENG ME 360", "Electromechanical Design"],
+            ],
+            "Senior Fall": [
+                ["Advanced Elective", "Choose approved advanced elective"],
+                ["ENG ME 419", "Heat Transfer"],
+                ["ENG ME 460", "Senior Design I"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+            "Senior Spring": [
+                ["Advanced Elective", "Choose approved advanced elective"],
+                ["Advanced Elective", "Choose approved advanced elective"],
+                ["ENG ME 461", "Senior Design II"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+        },
+        "dropdowns": {
+            "Advanced Elective": [
+                "Any ENG 300+ course, if no significant overlap",
+                "ENG ME 452 - Approved ME advanced elective",
+                "ENG ME 457 - Approved ME advanced elective",
+                "CAS AS 414 - Solar and Space Physics",
+                "CAS PY 313 - Waves and Modern Physics",
+                "CAS PY 314 - Waves and Modern Physics (Grenoble)",
+                "CAS PY 321 & 322 - Thermal Physics & Quantum Physics",
+                "ENG BE 209 - Molecular Cell Biology and Biotechnology",
+                "HUB XC 433 - Art & Science of Technology Consulting",
+                "HUB XC 438 - Art & Sci of Tech Consulting",
+                "QST SI 480 - Business of Technology Innovation",
+                "QST SI 482 - Technology and its Commercialization",
+                "Other approved 300+ math/natural science by petition",
+            ],
+            "Hub Elective": ["Use Course Search to choose a Hub course"],
+        },
+    },
+
+    "Biomedical Engineering": {
+        "abbr": "BME",
+        "units": 133,
+        "required_plan": {
+            "Freshman Fall": [
+                ["CAS MA 123", "Calculus I"],
+                ["ENG EK 100", "Freshman Seminar"],
+                ["CAS CH 101", "Chemistry I"],
+                ["ENG EK 125", "Programming for Engineers"],
+                ["CAS WR 120", "Writing Seminar"],
+            ],
+            "Freshman Spring": [
+                ["CAS MA 124", "Calculus II"],
+                ["CAS PY 211", "Physics I"],
+                ["CAS CH 102", "Chemistry II"],
+                ["ENG EK 131", "Introduction to Engineering"],
+                ["ENG EK 103", "Computational Linear Algebra"],
+            ],
+            "Sophomore Fall": [
+                ["CAS MA 225", "Multivariable Calculus"],
+                ["CAS PY 212", "Physics II"],
+                ["ENG EK 307", "Electric Circuits"],
+                ["ENG EK 210", "Introduction to Engineering Design"],
+                ["CAS WR 15x", "Writing, Research & Inquiry"],
+            ],
+            "Sophomore Spring": [
+                ["CAS MA 226", "Differential Equations"],
+                ["ENG BE 209", "Principles of Molecular Cell Biology & Biotech"],
+                ["ENG EK 301", "Engineering Mechanics"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+            "Junior Fall": [
+                ["ENG EK 381", "Probability, Statistics & Data Science"],
+                ["CAS BI 315", "Systems Physiology"],
+                ["ENG BE 403", "Signals & Controls"],
+                ["ENG BE 493", "BME Measurements & Analysis"],
+            ],
+            "Junior Spring": [
+                ["ENG BE 424", "Thermodynamics & Statistical Mechanics"],
+                ["Fields Elective", "Choose Continua & Fields elective"],
+                ["BME Design Elective", "Choose BME design elective"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+            "Senior Fall": [
+                ["ENG Elective", "Choose engineering elective"],
+                ["Professional Elective", "Choose professional elective"],
+                ["BME Elective", "Choose BME elective"],
+                ["ENG BE 465", "Senior Design I"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+            "Senior Spring": [
+                ["BME Elective", "Choose BME elective"],
+                ["Professional Elective", "Choose professional elective"],
+                ["ENG BE 466", "Senior Design II"],
+                ["Hub Elective", "Choose remaining Hub area"],
+            ],
+        },
+        "dropdowns": {
+            "Fields Elective": [
+                "ENG BE 420 - Introduction to Solid Biomechanics",
+                "ENG BE 435 - Transport Phenomena in Living Systems",
+                "ENG BE 436 - Fundamentals of Fluid Mechanics",
+            ],
+            "Professional Elective": [
+                "Any suitable ENG BE/EC/EK/ME 300, 400, 500 level course",
+                "CAS CH 203 - Organic Chemistry 1",
+                "CAS CH 204 - Organic Chemistry 2",
+                "CAS CH 300/400/500 level course except excluded courses",
+                "CAS PY 300/400/500 level course except excluded courses",
+                "CAS MA 300/400/500 level course except excluded courses",
+                "CAS BI 206 - Genetics",
+                "CAS BI 216 - Intensive Cell Biology",
+                "CAS BI 300/400/500 level course except excluded courses",
+                "ENG ME 357 - Intro to CAD",
+                "ENG ME 358 - Design & Manufacture",
+                "HUB XC 433 - Art & Science of Technology Consulting",
+                "HUB XC 438 - Art & Sci of Tech Consulting",
+                "QST SI 480 - Business of Technology Innovation",
+                "QST SI 482 - Technology & Its Commercialization",
+            ],
+            "ENG Elective": [
+                "ENG BE 404 - Advanced Controls",
+                "ENG BE 420 - Intro to Solid Biomechanics",
+                "ENG BE 425 - Intro to Biomedical Materials Science",
+                "ENG BE 435 - Transport Phenomena in Living Tissues",
+                "ENG BE 436 - Fundamentals Fluid Mechanics",
+                "ENG BE 471 - Quantitative Neuroscience",
+                "ENG BE 503 - Comp Methods in Biomed",
+                "ENG BE 508 - Quant Studies Resp & Card Sys",
+                "ENG BE 511 - Biomedical Instrumentation",
+                "ENG BE 517 - Optical Microscopy of Biological Materials",
+                "ENG BE 518 - Modern Optical Microscopy for Biomedical Imaging",
+                "ENG BE 521 - Continuum Mechanics BME",
+                "ENG BE 533 - Biorheology",
+                "ENG BE 526 - Fundamentals of Biomaterials",
+                "ENG BE 549 - Struct & Function Extracellular Matrix",
+                "ENG BE 552 - Computational Synthetic Biology",
+                "ENG BE 555 - Introduction to Biomedical Optics",
+                "ENG BE 556 - Optical Spectroscopic Imaging",
+                "ENG BE 557 - Programming Fundamentals for BME Data Analysis",
+                "ENG BE 559 - Foundations Biomedical Data Science & ML",
+                "ENG BE 562 - Computational Bio: ML Fundamentals",
+                "ENG BE 567 - Nonlinear Systems in BME",
+                "ENG BE 571 - Intro to Neuroengineering",
+                "ENG BE 572 - Neurotechnology Devices",
+                "ENG EC 311 - Intro to Logic Design",
+                "ENG EC 327 - Intro Software Engineering",
+                "ENG EC 410 - Intro to Electronics",
+                "ENG EC 414 - Intro to Machine Learning",
+                "ENG EC 455 - Electromagnetic Systems I",
+                "ENG EC 471 - Physics Semiconductor Devices",
+                "ENG EC 503 - Intro to Learning from Data",
+                "ENG EC 505 - Stochastic Processes",
+                "ENG EC 516 - Digital Signal Processing",
+                "ENG EC 522 - Intro to Computational Imaging",
+                "ENG EC 526 - Parallel Algorithms for High Performance Computing",
+                "ENG EK 481 - Nanomaterials & Nanotechnology",
+                "ENG ME 302 - Engineering Mechanics II",
+                "ENG ME 305 - Mechanics of Materials",
+                "ENG ME 309 - Structural Materials",
+                "ENG ME 419 - Heat Transfer",
+                "ENG ME 441 - Mechanical Vibrations",
+                "ENG ME 503 - Kinetic Processes in Materials",
+                "ENG ME 555 - MEMS: Fabrication & Materials",
+                "ENG ME 571 - Medical Robotics",
+            ],
+            "BME Elective": [
+                "Any ENG BE 400 or 500 level course except BE 451, BE 452, and BE 500",
+                "BE 451/BE 500/600-level/700-level by petition only",
+            ],
+            "BME Design Elective": [
+                "ENG BE 428 - Device Diagnostics & Design",
+                "ENG BE 468 - Clinical Applications of Biomedical Design",
+                "ENG BE 478 - Engineering Design for Refugee Health",
+            ],
+            "Hub Elective": ["Use Course Search to choose a Hub course"],
+        },
+    },
+}
 
 
 def make_backend_session():
@@ -22,20 +545,47 @@ def make_backend_session():
 def save_backend_cookies(s):
     """Save backend cookies back into the Flask browser session."""
     flask_session["backend_cookies"] = requests.utils.dict_from_cookiejar(s.cookies)
+    flask_session.permanent = True
     flask_session.modified = True
 
 
-HTML = r"""
+def backend_request(method, path, json_body=None, params=None, timeout=25):
+    s = make_backend_session()
+    url = BACKEND_URL + path
+    response = s.request(method, url, json=json_body, params=params, timeout=timeout)
+    save_backend_cookies(s)
+    return response
+
+
+BASE_HTML = r"""
 <!DOCTYPE html>
 <html>
 <head>
-  <title>BU Scheduler Backend Test UI</title>
+  <title>BU Course Scheduler</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
+    :root {
+      --bg: #f4f6fa;
+      --panel: #ffffff;
+      --ink: #111827;
+      --muted: #6b7280;
+      --blue: #2563eb;
+      --blue-dark: #1d4ed8;
+      --green: #059669;
+      --red: #dc2626;
+      --border: #d1d5db;
+      --soft: #eef2ff;
+      --purple: #ede9fe;
+      --yellow: #fff7ed;
+    }
+
+    * { box-sizing: border-box; }
+
     body {
-      font-family: Arial, sans-serif;
       margin: 0;
-      background: #f5f5f5;
-      color: #222;
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
     }
 
     header {
@@ -44,95 +594,89 @@ HTML = r"""
       padding: 16px 24px;
     }
 
-    h1 {
-      margin: 0;
+    header h1 {
+      margin: 0 0 8px 0;
       font-size: 24px;
+    }
+
+    nav {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    nav a, nav button {
+      color: white;
+      background: #374151;
+      text-decoration: none;
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    nav a:hover, nav button:hover {
+      background: #4b5563;
     }
 
     main {
       padding: 20px;
-      display: grid;
-      grid-template-columns: 380px 1fr;
-      gap: 20px;
+      max-width: 1500px;
+      margin: 0 auto;
     }
 
-    section {
-      background: white;
-      border-radius: 12px;
+    section, .panel {
+      background: var(--panel);
+      border-radius: 14px;
       padding: 16px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-      margin-bottom: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      margin-bottom: 18px;
     }
 
-    h2 {
-      margin-top: 0;
-      font-size: 18px;
-      border-bottom: 1px solid #ddd;
-      padding-bottom: 8px;
-    }
-
-    h3 {
-      margin-bottom: 8px;
-      font-size: 15px;
-    }
+    h2 { margin-top: 0; }
+    h3 { margin-bottom: 8px; }
 
     input, textarea, button, select {
       width: 100%;
-      box-sizing: border-box;
       padding: 9px;
       margin: 5px 0;
       border-radius: 8px;
-      border: 1px solid #bbb;
+      border: 1px solid var(--border);
       font-size: 14px;
     }
 
-    textarea {
-      min-height: 70px;
-      resize: vertical;
-    }
+    textarea { min-height: 72px; resize: vertical; }
 
     button {
-      background: #2563eb;
+      background: var(--blue);
       color: white;
+      font-weight: bold;
       border: none;
       cursor: pointer;
-      font-weight: bold;
     }
 
-    button:hover {
-      background: #1d4ed8;
+    button:hover { background: var(--blue-dark); }
+    button.secondary { background: #4b5563; }
+    button.success { background: var(--green); }
+    button.danger { background: var(--red); }
+    button.small { width: auto; padding: 6px 9px; font-size: 12px; margin: 3px; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 18px;
     }
 
-    .danger {
-      background: #dc2626;
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(220px, 1fr));
+      gap: 12px;
     }
 
-    .danger:hover {
-      background: #b91c1c;
-    }
-
-    .secondary {
-      background: #4b5563;
-    }
-
-    .secondary:hover {
-      background: #374151;
-    }
-
-    .success {
-      background: #059669;
-    }
-
-    .success:hover {
-      background: #047857;
-    }
-
-    .small-button {
-      width: auto;
-      padding: 6px 10px;
-      font-size: 12px;
-      margin-right: 5px;
-    }
+    .muted { color: var(--muted); font-size: 13px; }
+    .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #e5e7eb; font-size: 12px; margin: 3px; }
 
     .response-box {
       background: #111827;
@@ -145,490 +689,232 @@ HTML = r"""
       white-space: pre-wrap;
     }
 
-    .layout-wide {
+    .term-grid {
       display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 16px;
+      grid-template-columns: repeat(3, minmax(250px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
     }
 
-    .course-palette {
-      background: #f9fafb;
-      border: 1px dashed #bbb;
-      border-radius: 10px;
+    .term-box {
+      min-height: 210px;
+      border: 2px dashed #cbd5e1;
+      border-radius: 14px;
       padding: 10px;
-      min-height: 200px;
+      background: #f9fafb;
+    }
+
+    .term-box.special {
+      background: #fefce8;
+      border-color: #facc15;
+    }
+
+    .term-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
     }
 
     .course-card {
       background: #e0ecff;
       border: 1px solid #93c5fd;
       border-radius: 10px;
-      padding: 10px;
+      padding: 9px;
       margin: 8px 0;
       cursor: grab;
-      user-select: none;
     }
 
-    .course-card.selected {
-      outline: 3px solid #f59e0b;
-      background: #fef3c7;
+    .course-card.completed {
+      background: #dcfce7;
+      border-color: #86efac;
     }
 
-    .course-code {
+    .course-card.placeholder {
+      background: #ede9fe;
+      border-color: #c4b5fd;
+    }
+
+    .course-card .code {
       font-weight: bold;
-      font-size: 14px;
     }
 
-    .course-comment {
+    .course-card .detail {
+      color: #374151;
       font-size: 12px;
-      color: #444;
-      margin-top: 4px;
-    }
-
-    .terms-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(170px, 1fr));
-      gap: 12px;
-    }
-
-    .term-box {
-      background: #f9fafb;
-      border: 2px dashed #cbd5e1;
-      border-radius: 12px;
-      padding: 10px;
-      min-height: 220px;
-    }
-
-    .term-box:hover {
-      border-color: #2563eb;
-      background: #eff6ff;
-    }
-
-    .term-title {
-      font-weight: bold;
-      margin-bottom: 8px;
-      text-align: center;
-    }
-
-    .course-search-results {
-      max-height: 250px;
-      overflow: auto;
-      border: 1px solid #ddd;
-      border-radius: 10px;
-      padding: 8px;
-      background: #fafafa;
+      margin-top: 3px;
     }
 
     .result-item {
-      border-bottom: 1px solid #ddd;
-      padding: 8px;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 9px;
       cursor: pointer;
     }
 
-    .result-item:hover {
-      background: #e5e7eb;
+    .result-item:hover { background: #f3f4f6; }
+
+    .scrollbox {
+      max-height: 320px;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fafafa;
     }
 
-    .muted {
-      color: #666;
-      font-size: 12px;
+    .schedule-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 12px;
+      margin: 10px 0;
+      background: white;
     }
 
-    .top-row {
-      display: flex;
+    .schedule-terms {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
       gap: 8px;
+      margin-top: 8px;
     }
 
-    .top-row button {
-      flex: 1;
+    .term-summary {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 13px;
     }
 
-    .status-pill {
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 999px;
-      background: #e5e7eb;
-      color: #111827;
-      font-size: 12px;
-      margin-top: 6px;
+    @media (max-width: 900px) {
+      .grid-2, .grid-3, .term-grid, .schedule-terms {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
-
 <body>
-  <header>
-    <h1>BU Course Scheduler Backend Test UI</h1>
-    <div class="muted">Flask test UI → Node backend through Flask proxy</div>
-    <div class="status-pill" id="cookieStatus">Checking session...</div>
-  </header>
+<header>
+  <h1>BU Course Scheduler</h1>
+  <nav>
+    <a href="/login">Login</a>
+    <a href="/build">Build My Schedule</a>
+    <a href="/schedules">View Student Schedules</a>
+    <button onclick="quickMe()">Current User</button>
+    <span class="pill" id="cookieStatus">Checking session...</span>
+  </nav>
+</header>
 
-  <main>
-    <div>
-      <section>
-        <h2>Server</h2>
-        <button onclick="healthCheck()">Health Check</button>
-        <button onclick="getMe()">Get Current User</button>
-        <button class="secondary" onclick="checkFlaskSession()">Check Flask Cookie Storage</button>
-        <button class="danger" onclick="clearFlaskSession()">Clear Stored Flask Session</button>
-      </section>
-
-      <section>
-        <h2>Auth</h2>
-
-        <h3>Register</h3>
-        <input id="registerEmail" placeholder="email@bu.edu">
-        <input id="registerPassword" type="password" placeholder="password">
-        <input id="registerName" placeholder="display name">
-        <button onclick="registerUser()">Register</button>
-
-        <h3>Verify Email</h3>
-        <input id="verifyEmail" placeholder="email@bu.edu">
-        <input id="verifyCode" placeholder="6 digit code">
-        <button onclick="verifyEmail()">Verify</button>
-        <button class="secondary" onclick="resendVerificationCode()">Resend Verification Code</button>
-
-        <h3>Login</h3>
-        <input id="loginEmail" placeholder="email@bu.edu">
-        <input id="loginPassword" type="password" placeholder="password">
-        <button onclick="loginUser()">Login</button>
-        <button class="secondary" onclick="logoutUser()">Logout</button>
-      </section>
-
-      <section>
-        <h2>Forgot Password</h2>
-        <h3>Send Reset Code</h3>
-        <input id="forgotEmail" placeholder="email@bu.edu">
-        <button onclick="forgotPassword()">Send Password Reset Code</button>
-
-        <h3>Reset Password</h3>
-        <input id="resetEmail" placeholder="email@bu.edu">
-        <input id="resetCode" placeholder="6 digit reset code">
-        <input id="newPassword" type="password" placeholder="new password">
-        <button class="success" onclick="resetPassword()">Reset Password</button>
-      </section>
-
-      <section>
-        <h2>Course Search</h2>
-        <input id="courseQuery" placeholder="Search course, instructor, status...">
-        <button onclick="searchCourses()">Search Courses</button>
-
-        <div class="course-search-results" id="courseResults">
-          <div class="muted">Search results will appear here. Click a result to add it to the course palette.</div>
-        </div>
-      </section>
-
-      <section>
-        <h2>Raw API Response</h2>
-        <pre class="response-box" id="responseBox">No response yet.</pre>
-      </section>
-    </div>
-
-    <div>
-      <section>
-        <h2>Schedule Builder</h2>
-
-       <input id="scheduleTitle" value="My EE Four-Year Plan" placeholder="Schedule title">
-
-<select id="scheduleMajor">
-  <option value="">Select major</option>
-  <option value="Electrical Engineering">Electrical Engineering</option>
-  <option value="Computer Engineering">Computer Engineering</option>
-  <option value="Mechanical Engineering">Mechanical Engineering</option>
-  <option value="Biomedical Engineering">Biomedical Engineering</option>
-  <option value="Computer Science">Computer Science</option>
-  <option value="Other">Other</option>
-</select>
-
-<textarea id="scheduleComments" placeholder="Schedule comments">Testing schedule from Flask UI.</textarea>
-
-        <div class="layout-wide">
-          <div>
-            <h3>Course Palette</h3>
-            <div class="muted">
-              Drag a course into a semester, or click a course then click a semester box.
-            </div>
-
-            <input id="manualCourseCode" placeholder="Example: ENG EC 327">
-            <input id="manualCourseComment" placeholder="Optional comment">
-            <button onclick="addManualCourse()">Add Course Box</button>
-
-            <div class="course-palette" id="coursePalette" ondrop="dropCourse(event)" ondragover="allowDrop(event)">
-              <div class="course-card" draggable="true" onclick="selectCourse(this)" ondragstart="dragCourse(event)" data-code="CAS MA 123" data-comment="Calculus I">
-                <div class="course-code">CAS MA 123</div>
-                <div class="course-comment">Calculus I</div>
-              </div>
-
-              <div class="course-card" draggable="true" onclick="selectCourse(this)" ondragstart="dragCourse(event)" data-code="ENG EK 125" data-comment="Programming for Engineers">
-                <div class="course-code">ENG EK 125</div>
-                <div class="course-comment">Programming for Engineers</div>
-              </div>
-
-              <div class="course-card" draggable="true" onclick="selectCourse(this)" ondragstart="dragCourse(event)" data-code="ENG EC 327" data-comment="Computer elective option">
-                <div class="course-code">ENG EC 327</div>
-                <div class="course-comment">Computer elective option</div>
-              </div>
-
-              <div class="course-card" draggable="true" onclick="selectCourse(this)" ondragstart="dragCourse(event)" data-code="Hub Elective" data-comment="Choose Hub requirement">
-                <div class="course-code">Hub Elective</div>
-                <div class="course-comment">Choose Hub requirement</div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h3>Terms</h3>
-            <div class="top-row">
-              <button onclick="loadMySchedule()">Load My Schedule</button>
-              <button onclick="saveSchedule()">Save/Update My Schedule</button>
-              <button class="secondary" onclick="previewSchedule()">Preview JSON</button>
-            </div>
-
-            <div class="terms-grid" id="termsGrid">
-              <div class="term-box" data-term="Fall 2025" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Fall 2025</div></div>
-              <div class="term-box" data-term="Spring 2026" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Spring 2026</div></div>
-              <div class="term-box" data-term="Fall 2026" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Fall 2026</div></div>
-              <div class="term-box" data-term="Spring 2027" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Spring 2027</div></div>
-              <div class="term-box" data-term="Fall 2027" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Fall 2027</div></div>
-              <div class="term-box" data-term="Spring 2028" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Spring 2028</div></div>
-              <div class="term-box" data-term="Fall 2028" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Fall 2028</div></div>
-              <div class="term-box" data-term="Spring 2029" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Spring 2029</div></div>
-            </div>
-
-            <br>
-            <button class="danger" onclick="clearSchedule()">Clear Schedule Boxes</button>
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <h2>Public Schedules</h2>
-        <button onclick="getAllSchedules()">Get All Public Schedules</button>
-        <input id="scheduleIdInput" placeholder="Schedule ID">
-        <button onclick="getOneSchedule()">Get One Schedule</button>
-        <button class="danger" onclick="deleteSchedule()">Delete Schedule by ID</button>
-      </section>
-    </div>
-  </main>
+<main>
+  {{ content|safe }}
+</main>
 
 <script>
-let selectedCourse = null;
-let draggedCourseId = null;
-let nextCourseId = 1;
+const MAJOR_DATA = {{ major_data|safe }};
+const TERM_LABELS = {{ term_labels|safe }};
 
-function saveAuthFields() {
-  const ids = ["registerEmail", "verifyEmail", "loginEmail", "forgotEmail", "resetEmail"];
-  ids.forEach(id => {
+function showResponse(data, boxId="responseBox") {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  box.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+}
+
+async function api(method, path, body=null) {
+  const opts = { method, headers: {"Content-Type": "application/json"}, credentials: "same-origin" };
+  if (body !== null) opts.body = JSON.stringify(body);
+  const res = await fetch("/proxy" + path, opts);
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = text; }
+  showResponse({status: res.status, data});
+  await checkSession(false);
+  return {status: res.status, data};
+}
+
+async function checkSession(show=false) {
+  const res = await fetch("/session-status", {credentials:"same-origin"});
+  const data = await res.json();
+  const el = document.getElementById("cookieStatus");
+  if (el) el.textContent = data.hasBackendCookies ? "Logged-in cookie stored" : "No login cookie stored";
+  if (show) showResponse(data);
+  return data;
+}
+
+async function quickMe() {
+  await api("GET", "/api/auth/me");
+}
+
+window.addEventListener("load", () => checkSession(false));
+</script>
+
+{{ script|safe }}
+</body>
+</html>
+"""
+
+LOGIN_CONTENT = r"""
+<div class="grid-2">
+  <div>
+    <section>
+      <h2>Login</h2>
+      <input id="loginEmail" placeholder="email@bu.edu">
+      <input id="loginPassword" type="password" placeholder="password">
+      <button onclick="loginUser()">Login</button>
+      <button class="secondary" onclick="logoutUser()">Logout</button>
+      <button class="secondary" onclick="quickMe()">Get Current User</button>
+    </section>
+
+    <section>
+      <h2>Register</h2>
+      <input id="registerEmail" placeholder="email@bu.edu">
+      <input id="registerPassword" type="password" placeholder="password">
+      <input id="registerName" placeholder="display name">
+      <button onclick="registerUser()">Register</button>
+
+      <h3>Verify Email</h3>
+      <input id="verifyEmail" placeholder="email@bu.edu">
+      <input id="verifyCode" placeholder="6 digit code">
+      <button onclick="verifyEmail()">Verify</button>
+      <button class="secondary" onclick="resendVerificationCode()">Resend Code</button>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>Forgot Password</h2>
+      <input id="forgotEmail" placeholder="email@bu.edu">
+      <button onclick="forgotPassword()">Send Reset Code</button>
+
+      <h3>Reset Password</h3>
+      <input id="resetEmail" placeholder="email@bu.edu">
+      <input id="resetCode" placeholder="6 digit reset code">
+      <input id="newPassword" type="password" placeholder="new password">
+      <button class="success" onclick="resetPassword()">Reset Password</button>
+    </section>
+
+    <section>
+      <h2>Response</h2>
+      <pre id="responseBox" class="response-box">No response yet.</pre>
+    </section>
+  </div>
+</div>
+"""
+
+LOGIN_SCRIPT = r"""
+<script>
+function saveEmailFields() {
+  ["loginEmail","registerEmail","verifyEmail","forgotEmail","resetEmail"].forEach(id => {
     const el = document.getElementById(id);
     if (el) localStorage.setItem(id, el.value || "");
   });
 }
 
-function loadAuthFields() {
-  const ids = ["registerEmail", "verifyEmail", "loginEmail", "forgotEmail", "resetEmail"];
-  ids.forEach(id => {
+function loadEmailFields() {
+  ["loginEmail","registerEmail","verifyEmail","forgotEmail","resetEmail"].forEach(id => {
     const el = document.getElementById(id);
-    if (el && localStorage.getItem(id)) el.value = localStorage.getItem(id);
-    if (el) el.addEventListener("input", saveAuthFields);
+    if (!el) return;
+    el.value = localStorage.getItem(id) || "";
+    el.addEventListener("input", saveEmailFields);
   });
-}
-
-function showResponse(data) {
-  const box = document.getElementById("responseBox");
-  if (typeof data === "string") {
-    box.textContent = data;
-  } else {
-    box.textContent = JSON.stringify(data, null, 2);
-  }
-}
-
-async function api(method, path, body = null) {
-  const options = {
-    method,
-    headers: {
-      "Content-Type": "application/json"
-    },
-    credentials: "same-origin"
-  };
-
-  if (body !== null) {
-    options.body = JSON.stringify(body);
-  }
-
-  const res = await fetch("/proxy" + path, options);
-  const text = await res.text();
-
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = text;
-  }
-
-  showResponse({ status: res.status, data });
-  await checkFlaskSession(false);
-  return { status: res.status, data };
-}
-
-function makeCourseCard(code, comment = "") {
-  const card = document.createElement("div");
-  card.className = "course-card";
-  card.draggable = true;
-  card.dataset.code = code;
-  card.dataset.comment = comment;
-  card.id = "course-card-" + nextCourseId++;
-
-  card.onclick = function(event) {
-    event.stopPropagation();
-    selectCourse(card);
-  };
-
-  card.ondragstart = dragCourse;
-
-  card.innerHTML = `
-    <div class="course-code">${escapeHtml(code)}</div>
-    <div class="course-comment">${escapeHtml(comment || "")}</div>
-    <button class="small-button danger" onclick="removeCard(event, this)">Remove</button>
-  `;
-
-  return card;
-}
-
-function removeCard(event, button) {
-  event.stopPropagation();
-  const card = button.closest(".course-card");
-  if (selectedCourse === card) selectedCourse = null;
-  card.remove();
-}
-
-function escapeHtml(str) {
-  return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function selectCourse(card) {
-  document.querySelectorAll(".course-card").forEach(c => c.classList.remove("selected"));
-  selectedCourse = card;
-  card.classList.add("selected");
-}
-
-function termClicked(termBox) {
-  if (!selectedCourse) return;
-  termBox.appendChild(selectedCourse);
-  selectedCourse.classList.remove("selected");
-  selectedCourse = null;
-}
-
-function allowDrop(event) { event.preventDefault(); }
-
-function dragCourse(event) {
-  if (!event.target.id) event.target.id = "course-card-" + nextCourseId++;
-  draggedCourseId = event.target.id;
-  event.dataTransfer.setData("text/plain", draggedCourseId);
-}
-
-function dropCourse(event) {
-  event.preventDefault();
-  const id = event.dataTransfer.getData("text/plain") || draggedCourseId;
-  const card = document.getElementById(id);
-  if (!card) return;
-  event.currentTarget.appendChild(card);
-}
-
-function addManualCourse() {
-  const code = document.getElementById("manualCourseCode").value.trim();
-  const comment = document.getElementById("manualCourseComment").value.trim();
-  if (!code) { alert("Enter a course code."); return; }
-  const card = makeCourseCard(code, comment);
-  document.getElementById("coursePalette").appendChild(card);
-  document.getElementById("manualCourseCode").value = "";
-  document.getElementById("manualCourseComment").value = "";
-}
-
-function buildScheduleJson() {
-  const title = document.getElementById("scheduleTitle").value.trim();
-  const major = document.getElementById("scheduleMajor").value.trim();
-  const comments = document.getElementById("scheduleComments").value.trim();
-  const terms = {};
-
-  document.querySelectorAll(".term-box").forEach(termBox => {
-    const termName = termBox.dataset.term;
-    const courses = [];
-    termBox.querySelectorAll(".course-card").forEach(card => {
-      courses.push({ course_code: card.dataset.code, comments: card.dataset.comment || "" });
-    });
-    terms[termName] = courses;
-  });
-
-  return {
-  title,
-  major,
-  comments,
-  terms
-};
-}
-
-function previewSchedule() { showResponse(buildScheduleJson()); }
-
-function clearSchedule() {
-  const palette = document.getElementById("coursePalette");
-  document.querySelectorAll(".term-box .course-card").forEach(card => palette.appendChild(card));
-}
-
-function renderSchedule(schedule) {
-  document.getElementById("scheduleTitle").value = schedule.title || "";
-  document.getElementById("scheduleMajor").value = schedule.major || "";
-  document.getElementById("scheduleComments").value = schedule.comments || "";
-
-  document.querySelectorAll(".term-box").forEach(termBox => {
-    const title = termBox.querySelector(".term-title");
-    termBox.innerHTML = "";
-    termBox.appendChild(title);
-  });
-
-  const terms = schedule.terms || {};
-  for (const [termName, courses] of Object.entries(terms)) {
-    let termBox = document.querySelector(`.term-box[data-term="${termName}"]`);
-    if (!termBox) {
-      termBox = document.createElement("div");
-      termBox.className = "term-box";
-      termBox.dataset.term = termName;
-      termBox.onclick = function() { termClicked(termBox); };
-      termBox.ondrop = dropCourse;
-      termBox.ondragover = allowDrop;
-      termBox.innerHTML = `<div class="term-title">${escapeHtml(termName)}</div>`;
-      document.getElementById("termsGrid").appendChild(termBox);
-    }
-    courses.forEach(course => {
-      const card = makeCourseCard(course.course_code, course.comments || course.comment || course.course_title || "");
-      termBox.appendChild(card);
-    });
-  }
-}
-
-// -----------------------------
-// Endpoint tests
-// -----------------------------
-async function healthCheck() { await api("GET", "/health"); }
-
-async function checkFlaskSession(show = true) {
-  const res = await fetch("/session-status", { credentials: "same-origin" });
-  const data = await res.json();
-  document.getElementById("cookieStatus").textContent = data.hasBackendCookies
-    ? "Backend login cookie stored in Flask session"
-    : "No backend login cookie stored";
-  if (show) showResponse(data);
-  return data;
-}
-
-async function clearFlaskSession() {
-  const res = await fetch("/clear-session", { method: "POST", credentials: "same-origin" });
-  const data = await res.json();
-  showResponse(data);
-  await checkFlaskSession(false);
 }
 
 async function registerUser() {
@@ -637,117 +923,582 @@ async function registerUser() {
   const displayName = document.getElementById("registerName").value.trim();
   document.getElementById("verifyEmail").value = email;
   document.getElementById("loginEmail").value = email;
-  saveAuthFields();
+  saveEmailFields();
   await api("POST", "/api/auth/register", { email, password, displayName });
 }
 
 async function resendVerificationCode() {
   const email = document.getElementById("verifyEmail").value.trim() || document.getElementById("registerEmail").value.trim();
-  document.getElementById("verifyEmail").value = email;
-  saveAuthFields();
   await api("POST", "/api/auth/resend-verification-code", { email });
 }
 
 async function verifyEmail() {
-  const email = document.getElementById("verifyEmail").value.trim();
-  const code = document.getElementById("verifyCode").value.trim();
-  await api("POST", "/api/auth/verify-email", { email, code });
+  await api("POST", "/api/auth/verify-email", {
+    email: document.getElementById("verifyEmail").value.trim(),
+    code: document.getElementById("verifyCode").value.trim()
+  });
 }
 
 async function loginUser() {
-  const email = document.getElementById("loginEmail").value.trim();
-  const password = document.getElementById("loginPassword").value;
-  saveAuthFields();
-  await api("POST", "/api/auth/login", { email, password });
+  saveEmailFields();
+  await api("POST", "/api/auth/login", {
+    email: document.getElementById("loginEmail").value.trim(),
+    password: document.getElementById("loginPassword").value
+  });
 }
 
 async function logoutUser() {
   await api("POST", "/api/auth/logout");
-  await clearFlaskSession();
+  await fetch("/clear-session", {method:"POST", credentials:"same-origin"});
+  await checkSession(false);
 }
 
 async function forgotPassword() {
   const email = document.getElementById("forgotEmail").value.trim();
   document.getElementById("resetEmail").value = email;
-  saveAuthFields();
+  saveEmailFields();
   await api("POST", "/api/auth/forgot-password", { email });
 }
 
 async function resetPassword() {
-  const email = document.getElementById("resetEmail").value.trim();
-  const code = document.getElementById("resetCode").value.trim();
-  const newPassword = document.getElementById("newPassword").value;
-  await api("POST", "/api/auth/reset-password", { email, code, newPassword });
+  await api("POST", "/api/auth/reset-password", {
+    email: document.getElementById("resetEmail").value.trim(),
+    code: document.getElementById("resetCode").value.trim(),
+    newPassword: document.getElementById("newPassword").value
+  });
 }
 
-async function getMe() { await api("GET", "/api/auth/me"); }
+window.addEventListener("load", loadEmailFields);
+</script>
+"""
+
+BUILD_CONTENT = r"""
+<div class="grid-2">
+  <div>
+    <section>
+      <h2>Schedule Settings</h2>
+      <input id="scheduleTitle" value="My Four-Year Plan" placeholder="Schedule title">
+      <select id="scheduleMajor" onchange="majorChanged()"></select>
+      <textarea id="scheduleComments" placeholder="Schedule notes">Built in the unified Flask schedule builder.</textarea>
+      <button class="success" onclick="saveSchedule()">Save/Update My Schedule</button>
+      <button class="secondary" onclick="loadMySchedule()">Load My Existing Schedule</button>
+      <button class="secondary" onclick="loadRequiredPlan()">Load Required Plan for Major</button>
+      <button class="secondary" onclick="previewSchedule()">Preview JSON</button>
+    </section>
+
+    <section>
+      <h2>Add Course</h2>
+      <label>Requirement type</label>
+      <select id="requirementType" onchange="requirementTypeChanged()"></select>
+
+      <label>Approved elective/core choice</label>
+      <select id="electiveChoice" onchange="electiveChoiceChanged()"></select>
+
+      <label>Manual course code or placeholder</label>
+      <input id="manualCourseCode" placeholder="Example: ENG EC 327 or Technical Elective">
+
+      <label>Course note</label>
+      <input id="manualCourseComment" placeholder="Optional comment">
+
+      <button onclick="addManualCourse()">Add to Course Palette</button>
+      <button class="secondary" onclick="searchCourses()">Search BU Course Data</button>
+      <input id="courseQuery" placeholder="Search course, instructor, Hub, status...">
+      <div id="courseResults" class="scrollbox"><div class="muted" style="padding:8px;">Course search results appear here.</div></div>
+    </section>
+
+    <section>
+      <h2>Course Palette</h2>
+      <p class="muted">Drag cards into semesters, or use the semester dropdown on a card.</p>
+      <div id="coursePalette" class="term-box" ondrop="dropCourse(event)" ondragover="allowDrop(event)"></div>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>Semester Controls</h2>
+      <div class="grid-3">
+        <select id="newTermLabel"></select>
+        <input id="newTermCustom" placeholder="Optional custom label, e.g. Fifth Year Fall">
+        <button onclick="addTermBox()">Add Semester Box</button>
+      </div>
+      <p class="muted">Each schedule always includes Completed / Transferred and Required Courses. Add as many planning semesters as needed.</p>
+    </section>
+
+    <section>
+      <h2>My Schedule Builder</h2>
+      <div id="termGrid" class="term-grid"></div>
+    </section>
+
+    <section>
+      <h2>Response</h2>
+      <pre id="responseBox" class="response-box">No response yet.</pre>
+    </section>
+  </div>
+</div>
+"""
+
+BUILD_SCRIPT = r"""
+<script>
+let nextCardId = 1;
+
+function setupBuilder() {
+  const majorSelect = document.getElementById("scheduleMajor");
+  majorSelect.innerHTML = "";
+  Object.keys(MAJOR_DATA).forEach(major => {
+    const opt = document.createElement("option");
+    opt.value = major;
+    opt.textContent = major;
+    majorSelect.appendChild(opt);
+  });
+
+  const newTerm = document.getElementById("newTermLabel");
+  TERM_LABELS.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    newTerm.appendChild(opt);
+  });
+
+  ensureTermBox("Completed / Transferred", true);
+  ensureTermBox("Required Courses", true);
+  ["Freshman Fall","Freshman Spring","Sophomore Fall","Sophomore Spring","Junior Fall","Junior Spring","Senior Fall","Senior Spring"].forEach(t => ensureTermBox(t));
+  majorChanged();
+}
+
+function majorChanged() {
+  updateRequirementDropdown();
+}
+
+function updateRequirementDropdown() {
+  const major = document.getElementById("scheduleMajor").value;
+  const req = document.getElementById("requirementType");
+  req.innerHTML = "";
+  ["Regular Course", "Hub Elective"].concat(Object.keys(MAJOR_DATA[major]?.dropdowns || {})).forEach(type => {
+    if ([...req.options].some(o => o.value === type)) return;
+    const opt = document.createElement("option");
+    opt.value = type;
+    opt.textContent = type;
+    req.appendChild(opt);
+  });
+  requirementTypeChanged();
+}
+
+function requirementTypeChanged() {
+  const major = document.getElementById("scheduleMajor").value;
+  const type = document.getElementById("requirementType").value;
+  const choice = document.getElementById("electiveChoice");
+  choice.innerHTML = "";
+
+  const options = (MAJOR_DATA[major]?.dropdowns || {})[type] || [];
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = options.length ? "Select approved option..." : "No dropdown options for this type";
+  choice.appendChild(blank);
+
+  options.forEach(o => {
+    const opt = document.createElement("option");
+    opt.value = o;
+    opt.textContent = o;
+    choice.appendChild(opt);
+  });
+}
+
+function electiveChoiceChanged() {
+  const type = document.getElementById("requirementType").value;
+  const selected = document.getElementById("electiveChoice").value;
+  if (!selected) return;
+
+  const code = selected.split(" - ")[0].trim();
+  if (type.includes("Elective") || type.includes("Core") || type.includes("Breadth") || type.includes("Fields")) {
+    document.getElementById("manualCourseCode").value = `${type} (${code})`;
+    document.getElementById("manualCourseComment").value = selected;
+  } else {
+    document.getElementById("manualCourseCode").value = code;
+    document.getElementById("manualCourseComment").value = selected;
+  }
+}
+
+function ensureTermBox(termName, special=false) {
+  if (document.querySelector(`.term-box[data-term="${cssEscape(termName)}"]`)) return;
+  const grid = document.getElementById("termGrid");
+  const box = document.createElement("div");
+  box.className = "term-box" + (special ? " special" : "");
+  box.dataset.term = termName;
+  box.ondragover = allowDrop;
+  box.ondrop = dropCourse;
+  box.innerHTML = `<div class="term-title"><span>${escapeHtml(termName)}</span><button class="small danger" onclick="removeTermBox(event, this)">Remove</button></div>`;
+  grid.appendChild(box);
+}
+
+function removeTermBox(event, button) {
+  event.stopPropagation();
+  const box = button.closest(".term-box");
+  const term = box.dataset.term;
+  if (term === "Completed / Transferred" || term === "Required Courses") {
+    alert("This required bucket cannot be removed.");
+    return;
+  }
+  document.getElementById("coursePalette").append(...box.querySelectorAll(".course-card"));
+  box.remove();
+}
+
+function addTermBox() {
+  const custom = document.getElementById("newTermCustom").value.trim();
+  const label = custom || document.getElementById("newTermLabel").value;
+  ensureTermBox(label);
+  document.getElementById("newTermCustom").value = "";
+}
+
+function loadRequiredPlan() {
+  const major = document.getElementById("scheduleMajor").value;
+  const plan = MAJOR_DATA[major]?.required_plan || {};
+
+  Object.entries(plan).forEach(([term, courses]) => {
+    ensureTermBox(term);
+    const box = document.querySelector(`.term-box[data-term="${cssEscape(term)}"]`);
+    courses.forEach(([code, comment]) => {
+      box.appendChild(makeCourseCard({course_code: code, comments: comment, requirement_type: inferType(code)}));
+    });
+  });
+
+  const reqBox = document.querySelector(`.term-box[data-term="Required Courses"]`);
+  reqBox.querySelectorAll(".course-card").forEach(c => c.remove());
+  Object.entries(plan).forEach(([term, courses]) => {
+    courses.forEach(([code, comment]) => {
+      reqBox.appendChild(makeCourseCard({course_code: code, comments: `${term}: ${comment}`, requirement_type: inferType(code)}));
+    });
+  });
+}
+
+function inferType(code) {
+  if (code.includes("Elective")) return code;
+  return "Required Course";
+}
+
+function makeCourseCard(course) {
+  const card = document.createElement("div");
+  card.className = "course-card";
+  if ((course.status || "").toLowerCase().includes("completed") || (course.status || "").toLowerCase().includes("transferred")) card.classList.add("completed");
+  if ((course.course_code || "").includes("Elective")) card.classList.add("placeholder");
+
+  card.id = "course-" + nextCardId++;
+  card.draggable = true;
+  card.ondragstart = dragCourse;
+  card.dataset.code = course.course_code || "";
+  card.dataset.comments = course.comments || "";
+  card.dataset.requirementType = course.requirement_type || "";
+  card.dataset.selectedCourse = course.selected_course_code || "";
+  card.dataset.status = course.status || "planned";
+
+  card.innerHTML = `
+    <div class="code">${escapeHtml(card.dataset.code)}</div>
+    <div class="detail">${escapeHtml(card.dataset.comments)}</div>
+    <div class="detail">Type: ${escapeHtml(card.dataset.requirementType || "Course")} | Status: ${escapeHtml(card.dataset.status)}</div>
+    <select onchange="moveCardToTerm(this)">
+      <option value="">Move to...</option>
+      ${[...document.querySelectorAll("#termGrid .term-box")].map(b => `<option value="${escapeHtml(b.dataset.term)}">${escapeHtml(b.dataset.term)}</option>`).join("")}
+    </select>
+    <button class="small success" onclick="markCompleted(event, this)">Completed/Transferred</button>
+    <button class="small danger" onclick="removeCard(event, this)">Remove</button>
+  `;
+  return card;
+}
+
+function refreshMoveDropdowns() {
+  document.querySelectorAll(".course-card select").forEach(sel => {
+    const current = sel.value;
+    sel.innerHTML = `<option value="">Move to...</option>` + [...document.querySelectorAll("#termGrid .term-box")].map(b => `<option value="${escapeHtml(b.dataset.term)}">${escapeHtml(b.dataset.term)}</option>`).join("");
+    sel.value = current;
+  });
+}
+
+function moveCardToTerm(sel) {
+  const term = sel.value;
+  if (!term) return;
+  const box = document.querySelector(`.term-box[data-term="${cssEscape(term)}"]`);
+  if (box) box.appendChild(sel.closest(".course-card"));
+  sel.value = "";
+}
+
+function addManualCourse() {
+  const type = document.getElementById("requirementType").value;
+  const selected = document.getElementById("electiveChoice").value;
+  let code = document.getElementById("manualCourseCode").value.trim();
+  const comments = document.getElementById("manualCourseComment").value.trim();
+
+  if (!code && selected) {
+    const selectedCode = selected.split(" - ")[0].trim();
+    code = `${type} (${selectedCode})`;
+  }
+  if (!code) { alert("Enter a course code or select an elective option."); return; }
+
+  const selectedCode = selected ? selected.split(" - ")[0].trim() : "";
+  document.getElementById("coursePalette").appendChild(makeCourseCard({
+    course_code: code,
+    comments,
+    requirement_type: type,
+    selected_course_code: selectedCode
+  }));
+
+  document.getElementById("manualCourseCode").value = "";
+  document.getElementById("manualCourseComment").value = "";
+}
+
+function markCompleted(event, button) {
+  event.stopPropagation();
+  const card = button.closest(".course-card");
+  card.dataset.status = "completed/transferred";
+  card.classList.add("completed");
+  const completedBox = document.querySelector(`.term-box[data-term="Completed / Transferred"]`);
+  completedBox.appendChild(card);
+}
+
+function removeCard(event, button) {
+  event.stopPropagation();
+  button.closest(".course-card").remove();
+}
+
+function dragCourse(event) {
+  event.dataTransfer.setData("text/plain", event.target.id);
+}
+
+function allowDrop(event) {
+  event.preventDefault();
+}
+
+function dropCourse(event) {
+  event.preventDefault();
+  const id = event.dataTransfer.getData("text/plain");
+  const card = document.getElementById(id);
+  if (card) event.currentTarget.appendChild(card);
+}
+
+function buildScheduleJson() {
+  const title = document.getElementById("scheduleTitle").value.trim();
+  const major = document.getElementById("scheduleMajor").value;
+  const comments = document.getElementById("scheduleComments").value.trim();
+  const terms = {};
+
+  document.querySelectorAll("#termGrid .term-box").forEach(box => {
+    const term = box.dataset.term;
+    terms[term] = [];
+    box.querySelectorAll(".course-card").forEach(card => {
+      terms[term].push({
+        course_code: card.dataset.code,
+        comments: card.dataset.comments || "",
+        requirement_type: card.dataset.requirementType || "",
+        selected_course_code: card.dataset.selectedCourse || "",
+        status: card.dataset.status || "planned"
+      });
+    });
+  });
+
+  return { title, major, comments, terms };
+}
+
+function previewSchedule() {
+  showResponse(buildScheduleJson());
+}
+
+async function saveSchedule() {
+  const schedule = buildScheduleJson();
+  if (!schedule.title) { alert("Title required."); return; }
+  await api("POST", "/api/schedules", schedule);
+}
+
+async function loadMySchedule() {
+  const result = await api("GET", "/api/my-schedule");
+  const schedule = result.data?.schedule || result.data?.data?.schedule;
+  if (!schedule) { alert("No saved schedule found."); return; }
+  renderSchedule(schedule);
+}
+
+function renderSchedule(schedule) {
+  document.getElementById("scheduleTitle").value = schedule.title || "";
+  document.getElementById("scheduleMajor").value = schedule.major || Object.keys(MAJOR_DATA)[0];
+  document.getElementById("scheduleComments").value = schedule.comments || "";
+  majorChanged();
+
+  document.getElementById("termGrid").innerHTML = "";
+  ensureTermBox("Completed / Transferred", true);
+  ensureTermBox("Required Courses", true);
+
+  Object.entries(schedule.terms || {}).forEach(([term, courses]) => {
+    ensureTermBox(term, term === "Completed / Transferred" || term === "Required Courses");
+    const box = document.querySelector(`.term-box[data-term="${cssEscape(term)}"]`);
+    courses.forEach(c => box.appendChild(makeCourseCard(c)));
+  });
+}
 
 async function searchCourses() {
   const q = document.getElementById("courseQuery").value.trim();
   const result = await api("GET", "/api/courses?q=" + encodeURIComponent(q));
   const container = document.getElementById("courseResults");
   container.innerHTML = "";
-
-  const courses = result.data?.data?.results || result.data?.results || [];
-  if (!Array.isArray(courses) || courses.length === 0) {
-    container.innerHTML = `<div class="muted">No results found.</div>`;
+  const courses = result.data?.results || result.data?.data?.results || [];
+  if (!Array.isArray(courses) || !courses.length) {
+    container.innerHTML = `<div class="muted" style="padding:8px;">No results.</div>`;
     return;
   }
-
   courses.slice(0, 50).forEach(course => {
-    const item = document.createElement("div");
-    item.className = "result-item";
-    const code = course.course_code || "Unknown";
+    const div = document.createElement("div");
+    div.className = "result-item";
+    const code = course.course_code || "";
     const title = course.course_title || course.hub?.name || "";
-    const instructor = course.instructor || "";
-    const status = course.status || "";
-    item.innerHTML = `<strong>${escapeHtml(code)}</strong><br>${escapeHtml(title)}<br><span class="muted">${escapeHtml(instructor)} ${escapeHtml(status)}</span>`;
-    item.onclick = () => document.getElementById("coursePalette").appendChild(makeCourseCard(code, title));
-    container.appendChild(item);
+    div.innerHTML = `<b>${escapeHtml(code)}</b><br>${escapeHtml(title)}<br><span class="muted">${escapeHtml(course.instructor || "")} ${escapeHtml(course.status || "")}</span>`;
+    div.onclick = () => document.getElementById("coursePalette").appendChild(makeCourseCard({
+      course_code: code,
+      comments: title,
+      requirement_type: "Searched Course"
+    }));
+    container.appendChild(div);
   });
 }
 
-async function saveSchedule() {
-  const schedule = buildScheduleJson();
-  if (!schedule.title) { alert("Schedule title required."); return; }
-  await api("POST", "/api/schedules", schedule);
+function cssEscape(s) {
+  return String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-async function loadMySchedule() {
-  const result = await api("GET", "/api/my-schedule");
-  const schedule = result.data?.data?.schedule || result.data?.schedule;
-  if (!schedule) { alert("No saved schedule found for this logged-in user."); return; }
-  renderSchedule(schedule);
+function escapeHtml(str) {
+  return String(str || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-async function getAllSchedules() { await api("GET", "/api/schedules"); }
-
-async function getOneSchedule() {
-  const id = document.getElementById("scheduleIdInput").value.trim();
-  if (!id) { alert("Enter a schedule ID."); return; }
-  await api("GET", "/api/schedules/" + encodeURIComponent(id));
-}
-
-async function deleteSchedule() {
-  const id = document.getElementById("scheduleIdInput").value.trim();
-  if (!id) { alert("Enter a schedule ID."); return; }
-  await api("DELETE", "/api/schedules/" + encodeURIComponent(id));
-}
-
-window.addEventListener("load", () => {
-  loadAuthFields();
-  checkFlaskSession(false);
-});
+window.addEventListener("load", setupBuilder);
 </script>
+"""
 
-</body>
-</html>
+SCHEDULES_CONTENT = r"""
+<section>
+  <h2>View Student Schedules</h2>
+  <div class="grid-3">
+    <select id="filterMajor"></select>
+    <input id="filterText" placeholder="Filter by student, course, comment, semester...">
+    <button onclick="loadSchedules()">Load / Filter Schedules</button>
+  </div>
+</section>
+
+<section>
+  <h2>Results</h2>
+  <div id="scheduleResults" class="scrollbox" style="max-height: none; padding: 10px;">Click Load / Filter Schedules.</div>
+</section>
+
+<section>
+  <h2>Response</h2>
+  <pre id="responseBox" class="response-box">No response yet.</pre>
+</section>
+"""
+
+SCHEDULES_SCRIPT = r"""
+<script>
+function setupScheduleFilters() {
+  const major = document.getElementById("filterMajor");
+  major.innerHTML = `<option value="">All majors</option>`;
+  Object.keys(MAJOR_DATA).forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = m;
+    major.appendChild(opt);
+  });
+}
+
+async function loadSchedules() {
+  const result = await api("GET", "/api/schedules");
+  const schedules = result.data?.data || result.data || [];
+  renderSchedules(Array.isArray(schedules) ? schedules : []);
+}
+
+function renderSchedules(schedules) {
+  const majorFilter = document.getElementById("filterMajor").value.toLowerCase();
+  const text = document.getElementById("filterText").value.toLowerCase();
+  const container = document.getElementById("scheduleResults");
+  container.innerHTML = "";
+
+  const filtered = schedules.filter(s => {
+    const haystack = JSON.stringify(s).toLowerCase();
+    const okMajor = !majorFilter || String(s.major || "").toLowerCase() === majorFilter;
+    const okText = !text || haystack.includes(text);
+    return okMajor && okText;
+  });
+
+  if (!filtered.length) {
+    container.innerHTML = `<div class="muted">No matching schedules found.</div>`;
+    return;
+  }
+
+  filtered.forEach(s => {
+    const card = document.createElement("div");
+    card.className = "schedule-card";
+    const creator = s.creator?.displayName || s.creator?.email || "Unknown student";
+    const terms = s.terms || {};
+    const termHtml = Object.entries(terms).map(([term, courses]) => {
+      const list = (courses || []).map(c => `<li>${escapeHtml(c.course_code)} ${c.status ? `<span class="muted">(${escapeHtml(c.status)})</span>` : ""}</li>`).join("");
+      return `<div class="term-summary"><b>${escapeHtml(term)}</b><ul>${list || "<li class='muted'>No courses</li>"}</ul></div>`;
+    }).join("");
+
+    card.innerHTML = `
+      <h3>${escapeHtml(s.title || "Untitled Schedule")}</h3>
+      <div class="muted">Student: ${escapeHtml(creator)} | Major: ${escapeHtml(s.major || "Unspecified")}</div>
+      <p>${escapeHtml(s.comments || "")}</p>
+      <div class="schedule-terms">${termHtml}</div>
+      <button class="secondary" onclick='showResponse(${JSON.stringify(JSON.stringify(s, null, 2))})'>Show Raw JSON</button>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+window.addEventListener("load", setupScheduleFilters);
+</script>
 """
 
 
+def render_page(content, script=""):
+    import json
+    return render_template_string(
+        BASE_HTML,
+        content=content,
+        script=script,
+        major_data=json.dumps(MAJOR_DATA),
+        term_labels=json.dumps(TERM_LABELS),
+    )
+
+
 @app.route("/")
-def index():
-    return render_template_string(HTML)
+def root():
+    return redirect("/login")
+
+
+@app.route("/login")
+def login_page():
+    return render_page(LOGIN_CONTENT, LOGIN_SCRIPT)
+
+
+@app.route("/build")
+def build_page():
+    return render_page(BUILD_CONTENT, BUILD_SCRIPT)
+
+
+@app.route("/schedules")
+def schedules_page():
+    return render_page(SCHEDULES_CONTENT, SCHEDULES_SCRIPT)
+
+
+@app.route("/program-data")
+def program_data():
+    return jsonify({"majors": MAJOR_DATA, "termLabels": TERM_LABELS})
 
 
 @app.route("/session-status")
@@ -756,7 +1507,7 @@ def session_status():
     return jsonify({
         "hasBackendCookies": bool(cookies),
         "backendCookieNames": list(cookies.keys()),
-        "note": "Cookies are stored per browser in Flask's signed session cookie, not in one shared global Python session.",
+        "note": "Cookies are stored per browser in Flask's signed session cookie.",
     })
 
 
@@ -774,27 +1525,22 @@ def proxy(path):
     backend_session = make_backend_session()
 
     try:
-        if request.method == "GET":
-            response = backend_session.get(url, params=request.args, timeout=20)
-        elif request.method == "POST":
-            response = backend_session.post(url, json=request.get_json(silent=True), timeout=20)
-        elif request.method == "PUT":
-            response = backend_session.put(url, json=request.get_json(silent=True), timeout=20)
-        elif request.method == "DELETE":
-            response = backend_session.delete(url, json=request.get_json(silent=True), timeout=20)
-        else:
-            return jsonify({"error": "Unsupported method"}), 405
+        response = backend_session.request(
+            request.method,
+            url,
+            params=request.args if request.method == "GET" else None,
+            json=request.get_json(silent=True) if request.method in ["POST", "PUT", "DELETE"] else None,
+            timeout=30,
+        )
 
         save_backend_cookies(backend_session)
 
-        # If backend logout clears its cookie, also clear our stored cookie jar.
         if path == "api/auth/logout" and request.method == "POST" and response.status_code < 400:
             flask_session.pop("backend_cookies", None)
             flask_session.modified = True
 
         try:
-            data = response.json()
-            return jsonify(data), response.status_code
+            return jsonify(response.json()), response.status_code
         except Exception:
             return response.text, response.status_code
 
@@ -818,4 +1564,5 @@ def proxy(path):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", debug=True, port=5000)
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(host="0.0.0.0", debug=True, port=port)

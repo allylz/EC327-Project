@@ -878,7 +878,7 @@ BASE_HTML = r"""
 
     .term-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(360px, 1fr));
+      grid-template-columns: 1fr;
       gap: 10px;
       margin-top: 8px;
       align-items: start;
@@ -891,6 +891,11 @@ BASE_HTML = r"""
       padding: 8px;
       background: #f9fafb;
       box-sizing: border-box;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 7px;
+      width: 100%;
     }
 
     .palette-box {
@@ -904,11 +909,13 @@ BASE_HTML = r"""
 
     .term-title {
       font-weight: bold;
-      margin-bottom: 6px;
+      margin-bottom: 2px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 8px;
+      flex: 0 0 100%;
+      width: 100%;
     }
 
     .course-card {
@@ -916,14 +923,24 @@ BASE_HTML = r"""
       border: 1px solid #93c5fd;
       border-radius: 9px;
       padding: 6px 7px;
-      margin: 5px 0;
+      margin: 0;
       cursor: grab;
       display: grid;
-      grid-template-columns: minmax(145px, 200px) minmax(220px, 1fr) auto;
+      grid-template-columns: minmax(115px, 170px) minmax(150px, 1fr) auto;
       gap: 7px;
       align-items: center;
-      width: 100%;
+      flex: 1 1 430px;
+      max-width: 100%;
+      min-width: min(100%, 300px);
       box-sizing: border-box;
+    }
+
+    .course-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 4px;
     }
 
     .card-choice-wrap {

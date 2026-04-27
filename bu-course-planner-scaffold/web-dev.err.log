@@ -9,3 +9,10 @@ Error: read ECONNRESET
 AggregateError [ECONNREFUSED]: 
     at internalConnectMultiple (node:net:1193:18)
     at afterConnectMultiple (node:net:1783:7)
+npm error Lifecycle script `dev` failed with error:
+npm error code 1073807364
+npm error path C:\Users\Benjamin Lin\EC327\EC327-Project\bu-course-planner-scaffold\apps\web
+npm error workspace @bu-planner/web@0.1.0
+npm error location C:\Users\Benjamin Lin\EC327\EC327-Project\bu-course-planner-scaffold\apps\web
+npm error command failed
+npm error command C:\Windows\system32\cmd.exe /d /s /c vite --host 127.0.0.1

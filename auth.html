@@ -1,0 +1,14 @@
+<!-- auth.html: small example page to prove the dropdown/router works. -->
+<section style="background:white;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+  <h2>Auth Quick Test Page</h2>
+  <p>This file is automatically discovered because it is an HTML file in the Flask root folder.</p>
+  <button onclick="testHealth()" style="padding:9px;border-radius:8px;border:none;background:#2563eb;color:white;font-weight:bold;">Health Check</button>
+  <pre id="quickOutput" style="background:#111827;color:#d1fae5;padding:12px;border-radius:10px;white-space:pre-wrap;"></pre>
+</section>
+<script>
+async function testHealth() {
+  const res = await fetch('/proxy/health');
+  const data = await res.json();
+  document.getElementById('quickOutput').textContent = JSON.stringify(data, null, 2);
+}
+</script>

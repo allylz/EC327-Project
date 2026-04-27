@@ -1,13 +1,28 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, session as flask_session
+import os
 import requests
 
 app = Flask(__name__)
 
-BACKEND_URL = "http://localhost:4000"
+# Needed so Flask can store each browser user's backend cookie jar in a signed browser cookie.
+# For real deployment, set FLASK_SECRET_KEY in your environment.
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-change-this-secret-key")
 
-# One shared session for testing.
-# This keeps the backend login cookie after /api/auth/login.
-backend_session = requests.Session()
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:4000")
+
+
+def make_backend_session():
+    """Create a requests session and load this browser user's saved backend cookies."""
+    s = requests.Session()
+    for name, value in flask_session.get("backend_cookies", {}).items():
+        s.cookies.set(name, value)
+    return s
+
+
+def save_backend_cookies(s):
+    """Save backend cookies back into the Flask browser session."""
+    flask_session["backend_cookies"] = requests.utils.dict_from_cookiejar(s.cookies)
+    flask_session.modified = True
 
 
 HTML = r"""
@@ -37,7 +52,7 @@ HTML = r"""
     main {
       padding: 20px;
       display: grid;
-      grid-template-columns: 360px 1fr;
+      grid-template-columns: 380px 1fr;
       gap: 20px;
     }
 
@@ -104,6 +119,14 @@ HTML = r"""
       background: #374151;
     }
 
+    .success {
+      background: #059669;
+    }
+
+    .success:hover {
+      background: #047857;
+    }
+
     .small-button {
       width: auto;
       padding: 6px 10px;
@@ -117,7 +140,7 @@ HTML = r"""
       padding: 12px;
       border-radius: 10px;
       overflow: auto;
-      max-height: 300px;
+      max-height: 360px;
       font-size: 12px;
       white-space: pre-wrap;
     }
@@ -219,13 +242,24 @@ HTML = r"""
     .top-row button {
       flex: 1;
     }
+
+    .status-pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      color: #111827;
+      font-size: 12px;
+      margin-top: 6px;
+    }
   </style>
 </head>
 
 <body>
   <header>
     <h1>BU Course Scheduler Backend Test UI</h1>
-    <div class="muted">Flask test UI → Node backend at http://localhost:4000</div>
+    <div class="muted">Flask test UI → Node backend through Flask proxy</div>
+    <div class="status-pill" id="cookieStatus">Checking session...</div>
   </header>
 
   <main>
@@ -234,6 +268,8 @@ HTML = r"""
         <h2>Server</h2>
         <button onclick="healthCheck()">Health Check</button>
         <button onclick="getMe()">Get Current User</button>
+        <button class="secondary" onclick="checkFlaskSession()">Check Flask Cookie Storage</button>
+        <button class="danger" onclick="clearFlaskSession()">Clear Stored Flask Session</button>
       </section>
 
       <section>
@@ -249,12 +285,26 @@ HTML = r"""
         <input id="verifyEmail" placeholder="email@bu.edu">
         <input id="verifyCode" placeholder="6 digit code">
         <button onclick="verifyEmail()">Verify</button>
+        <button class="secondary" onclick="resendVerificationCode()">Resend Verification Code</button>
 
         <h3>Login</h3>
         <input id="loginEmail" placeholder="email@bu.edu">
         <input id="loginPassword" type="password" placeholder="password">
         <button onclick="loginUser()">Login</button>
         <button class="secondary" onclick="logoutUser()">Logout</button>
+      </section>
+
+      <section>
+        <h2>Forgot Password</h2>
+        <h3>Send Reset Code</h3>
+        <input id="forgotEmail" placeholder="email@bu.edu">
+        <button onclick="forgotPassword()">Send Password Reset Code</button>
+
+        <h3>Reset Password</h3>
+        <input id="resetEmail" placeholder="email@bu.edu">
+        <input id="resetCode" placeholder="6 digit reset code">
+        <input id="newPassword" type="password" placeholder="new password">
+        <button class="success" onclick="resetPassword()">Reset Password</button>
       </section>
 
       <section>
@@ -323,37 +373,14 @@ HTML = r"""
             </div>
 
             <div class="terms-grid" id="termsGrid">
-              <div class="term-box" data-term="Fall 2025" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)">
-                <div class="term-title">Fall 2025</div>
-              </div>
-
-              <div class="term-box" data-term="Spring 2026" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)">
-                <div class="term-title">Spring 2026</div>
-              </div>
-
-              <div class="term-box" data-term="Fall 2026" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)">
-                <div class="term-title">Fall 2026</div>
-              </div>
-
-              <div class="term-box" data-term="Spring 2027" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)">
-                <div class="term-title">Spring 2027</div>
-              </div>
-
-              <div class="term-box" data-term="Fall 2027" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)">
-                <div class="term-title">Fall 2027</div>
-              </div>
-
-              <div class="term-box" data-term="Spring 2028" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)">
-                <div class="term-title">Spring 2028</div>
-              </div>
-
-              <div class="term-box" data-term="Fall 2028" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)">
-                <div class="term-title">Fall 2028</div>
-              </div>
-
-              <div class="term-box" data-term="Spring 2029" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)">
-                <div class="term-title">Spring 2029</div>
-              </div>
+              <div class="term-box" data-term="Fall 2025" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Fall 2025</div></div>
+              <div class="term-box" data-term="Spring 2026" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Spring 2026</div></div>
+              <div class="term-box" data-term="Fall 2026" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Fall 2026</div></div>
+              <div class="term-box" data-term="Spring 2027" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Spring 2027</div></div>
+              <div class="term-box" data-term="Fall 2027" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Fall 2027</div></div>
+              <div class="term-box" data-term="Spring 2028" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Spring 2028</div></div>
+              <div class="term-box" data-term="Fall 2028" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Fall 2028</div></div>
+              <div class="term-box" data-term="Spring 2029" onclick="termClicked(this)" ondrop="dropCourse(event)" ondragover="allowDrop(event)"><div class="term-title">Spring 2029</div></div>
             </div>
 
             <br>
@@ -377,6 +404,23 @@ let selectedCourse = null;
 let draggedCourseId = null;
 let nextCourseId = 1;
 
+function saveAuthFields() {
+  const ids = ["registerEmail", "verifyEmail", "loginEmail", "forgotEmail", "resetEmail"];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) localStorage.setItem(id, el.value || "");
+  });
+}
+
+function loadAuthFields() {
+  const ids = ["registerEmail", "verifyEmail", "loginEmail", "forgotEmail", "resetEmail"];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && localStorage.getItem(id)) el.value = localStorage.getItem(id);
+    if (el) el.addEventListener("input", saveAuthFields);
+  });
+}
+
 function showResponse(data) {
   const box = document.getElementById("responseBox");
   if (typeof data === "string") {
@@ -391,7 +435,8 @@ async function api(method, path, body = null) {
     method,
     headers: {
       "Content-Type": "application/json"
-    }
+    },
+    credentials: "same-origin"
   };
 
   if (body !== null) {
@@ -408,11 +453,8 @@ async function api(method, path, body = null) {
     data = text;
   }
 
-  showResponse({
-    status: res.status,
-    data
-  });
-
+  showResponse({ status: res.status, data });
+  await checkFlaskSession(false);
   return { status: res.status, data };
 }
 
@@ -443,9 +485,7 @@ function makeCourseCard(code, comment = "") {
 function removeCard(event, button) {
   event.stopPropagation();
   const card = button.closest(".course-card");
-  if (selectedCourse === card) {
-    selectedCourse = null;
-  }
+  if (selectedCourse === card) selectedCourse = null;
   card.remove();
 }
 
@@ -466,49 +506,33 @@ function selectCourse(card) {
 
 function termClicked(termBox) {
   if (!selectedCourse) return;
-
   termBox.appendChild(selectedCourse);
   selectedCourse.classList.remove("selected");
   selectedCourse = null;
 }
 
-function allowDrop(event) {
-  event.preventDefault();
-}
+function allowDrop(event) { event.preventDefault(); }
 
 function dragCourse(event) {
-  if (!event.target.id) {
-    event.target.id = "course-card-" + nextCourseId++;
-  }
-
+  if (!event.target.id) event.target.id = "course-card-" + nextCourseId++;
   draggedCourseId = event.target.id;
   event.dataTransfer.setData("text/plain", draggedCourseId);
 }
 
 function dropCourse(event) {
   event.preventDefault();
-
   const id = event.dataTransfer.getData("text/plain") || draggedCourseId;
   const card = document.getElementById(id);
-
   if (!card) return;
-
-  const dropTarget = event.currentTarget;
-  dropTarget.appendChild(card);
+  event.currentTarget.appendChild(card);
 }
 
 function addManualCourse() {
   const code = document.getElementById("manualCourseCode").value.trim();
   const comment = document.getElementById("manualCourseComment").value.trim();
-
-  if (!code) {
-    alert("Enter a course code.");
-    return;
-  }
-
+  if (!code) { alert("Enter a course code."); return; }
   const card = makeCourseCard(code, comment);
   document.getElementById("coursePalette").appendChild(card);
-
   document.getElementById("manualCourseCode").value = "";
   document.getElementById("manualCourseComment").value = "";
 }
@@ -516,40 +540,25 @@ function addManualCourse() {
 function buildScheduleJson() {
   const title = document.getElementById("scheduleTitle").value.trim();
   const comments = document.getElementById("scheduleComments").value.trim();
-
   const terms = {};
 
   document.querySelectorAll(".term-box").forEach(termBox => {
     const termName = termBox.dataset.term;
     const courses = [];
-
     termBox.querySelectorAll(".course-card").forEach(card => {
-      courses.push({
-        course_code: card.dataset.code,
-        comments: card.dataset.comment || ""
-      });
+      courses.push({ course_code: card.dataset.code, comments: card.dataset.comment || "" });
     });
-
     terms[termName] = courses;
   });
 
-  return {
-    title,
-    comments,
-    terms
-  };
+  return { title, comments, terms };
 }
 
-function previewSchedule() {
-  showResponse(buildScheduleJson());
-}
+function previewSchedule() { showResponse(buildScheduleJson()); }
 
 function clearSchedule() {
   const palette = document.getElementById("coursePalette");
-
-  document.querySelectorAll(".term-box .course-card").forEach(card => {
-    palette.appendChild(card);
-  });
+  document.querySelectorAll(".term-box .course-card").forEach(card => palette.appendChild(card));
 }
 
 function renderSchedule(schedule) {
@@ -563,10 +572,8 @@ function renderSchedule(schedule) {
   });
 
   const terms = schedule.terms || {};
-
   for (const [termName, courses] of Object.entries(terms)) {
     let termBox = document.querySelector(`.term-box[data-term="${termName}"]`);
-
     if (!termBox) {
       termBox = document.createElement("div");
       termBox.className = "term-box";
@@ -577,12 +584,8 @@ function renderSchedule(schedule) {
       termBox.innerHTML = `<div class="term-title">${escapeHtml(termName)}</div>`;
       document.getElementById("termsGrid").appendChild(termBox);
     }
-
     courses.forEach(course => {
-      const card = makeCourseCard(
-        course.course_code,
-        course.comments || course.comment || course.course_title || ""
-      );
+      const card = makeCourseCard(course.course_code, course.comments || course.comment || course.course_title || "");
       termBox.appendChild(card);
     });
   }
@@ -591,61 +594,83 @@ function renderSchedule(schedule) {
 // -----------------------------
 // Endpoint tests
 // -----------------------------
+async function healthCheck() { await api("GET", "/health"); }
 
-async function healthCheck() {
-  await api("GET", "/health");
+async function checkFlaskSession(show = true) {
+  const res = await fetch("/session-status", { credentials: "same-origin" });
+  const data = await res.json();
+  document.getElementById("cookieStatus").textContent = data.hasBackendCookies
+    ? "Backend login cookie stored in Flask session"
+    : "No backend login cookie stored";
+  if (show) showResponse(data);
+  return data;
+}
+
+async function clearFlaskSession() {
+  const res = await fetch("/clear-session", { method: "POST", credentials: "same-origin" });
+  const data = await res.json();
+  showResponse(data);
+  await checkFlaskSession(false);
 }
 
 async function registerUser() {
   const email = document.getElementById("registerEmail").value.trim();
   const password = document.getElementById("registerPassword").value;
   const displayName = document.getElementById("registerName").value.trim();
+  document.getElementById("verifyEmail").value = email;
+  document.getElementById("loginEmail").value = email;
+  saveAuthFields();
+  await api("POST", "/api/auth/register", { email, password, displayName });
+}
 
-  await api("POST", "/api/auth/register", {
-    email,
-    password,
-    displayName
-  });
+async function resendVerificationCode() {
+  const email = document.getElementById("verifyEmail").value.trim() || document.getElementById("registerEmail").value.trim();
+  document.getElementById("verifyEmail").value = email;
+  saveAuthFields();
+  await api("POST", "/api/auth/resend-verification-code", { email });
 }
 
 async function verifyEmail() {
   const email = document.getElementById("verifyEmail").value.trim();
   const code = document.getElementById("verifyCode").value.trim();
-
-  await api("POST", "/api/auth/verify-email", {
-    email,
-    code
-  });
+  await api("POST", "/api/auth/verify-email", { email, code });
 }
 
 async function loginUser() {
   const email = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value;
-
-  await api("POST", "/api/auth/login", {
-    email,
-    password
-  });
+  saveAuthFields();
+  await api("POST", "/api/auth/login", { email, password });
 }
 
 async function logoutUser() {
   await api("POST", "/api/auth/logout");
+  await clearFlaskSession();
 }
 
-async function getMe() {
-  await api("GET", "/api/auth/me");
+async function forgotPassword() {
+  const email = document.getElementById("forgotEmail").value.trim();
+  document.getElementById("resetEmail").value = email;
+  saveAuthFields();
+  await api("POST", "/api/auth/forgot-password", { email });
 }
+
+async function resetPassword() {
+  const email = document.getElementById("resetEmail").value.trim();
+  const code = document.getElementById("resetCode").value.trim();
+  const newPassword = document.getElementById("newPassword").value;
+  await api("POST", "/api/auth/reset-password", { email, code, newPassword });
+}
+
+async function getMe() { await api("GET", "/api/auth/me"); }
 
 async function searchCourses() {
   const q = document.getElementById("courseQuery").value.trim();
-
   const result = await api("GET", "/api/courses?q=" + encodeURIComponent(q));
   const container = document.getElementById("courseResults");
-
   container.innerHTML = "";
 
   const courses = result.data?.data?.results || result.data?.results || [];
-
   if (!Array.isArray(courses) || courses.length === 0) {
     container.innerHTML = `<div class="muted">No results found.</div>`;
     return;
@@ -654,76 +679,47 @@ async function searchCourses() {
   courses.slice(0, 50).forEach(course => {
     const item = document.createElement("div");
     item.className = "result-item";
-
     const code = course.course_code || "Unknown";
     const title = course.course_title || course.hub?.name || "";
     const instructor = course.instructor || "";
     const status = course.status || "";
-
-    item.innerHTML = `
-      <strong>${escapeHtml(code)}</strong><br>
-      ${escapeHtml(title)}<br>
-      <span class="muted">${escapeHtml(instructor)} ${escapeHtml(status)}</span>
-    `;
-
-    item.onclick = () => {
-      const card = makeCourseCard(code, title);
-      document.getElementById("coursePalette").appendChild(card);
-    };
-
+    item.innerHTML = `<strong>${escapeHtml(code)}</strong><br>${escapeHtml(title)}<br><span class="muted">${escapeHtml(instructor)} ${escapeHtml(status)}</span>`;
+    item.onclick = () => document.getElementById("coursePalette").appendChild(makeCourseCard(code, title));
     container.appendChild(item);
   });
 }
 
 async function saveSchedule() {
   const schedule = buildScheduleJson();
-
-  if (!schedule.title) {
-    alert("Schedule title required.");
-    return;
-  }
-
+  if (!schedule.title) { alert("Schedule title required."); return; }
   await api("POST", "/api/schedules", schedule);
 }
 
 async function loadMySchedule() {
   const result = await api("GET", "/api/my-schedule");
-
   const schedule = result.data?.data?.schedule || result.data?.schedule;
-
-  if (!schedule) {
-    alert("No saved schedule found for this logged-in user.");
-    return;
-  }
-
+  if (!schedule) { alert("No saved schedule found for this logged-in user."); return; }
   renderSchedule(schedule);
 }
 
-async function getAllSchedules() {
-  await api("GET", "/api/schedules");
-}
+async function getAllSchedules() { await api("GET", "/api/schedules"); }
 
 async function getOneSchedule() {
   const id = document.getElementById("scheduleIdInput").value.trim();
-
-  if (!id) {
-    alert("Enter a schedule ID.");
-    return;
-  }
-
+  if (!id) { alert("Enter a schedule ID."); return; }
   await api("GET", "/api/schedules/" + encodeURIComponent(id));
 }
 
 async function deleteSchedule() {
   const id = document.getElementById("scheduleIdInput").value.trim();
-
-  if (!id) {
-    alert("Enter a schedule ID.");
-    return;
-  }
-
+  if (!id) { alert("Enter a schedule ID."); return; }
   await api("DELETE", "/api/schedules/" + encodeURIComponent(id));
 }
+
+window.addEventListener("load", () => {
+  loadAuthFields();
+  checkFlaskSession(false);
+});
 </script>
 
 </body>
@@ -736,42 +732,47 @@ def index():
     return render_template_string(HTML)
 
 
+@app.route("/session-status")
+def session_status():
+    cookies = flask_session.get("backend_cookies", {})
+    return jsonify({
+        "hasBackendCookies": bool(cookies),
+        "backendCookieNames": list(cookies.keys()),
+        "note": "Cookies are stored per browser in Flask's signed session cookie, not in one shared global Python session.",
+    })
+
+
+@app.route("/clear-session", methods=["POST"])
+def clear_session():
+    flask_session.pop("backend_cookies", None)
+    flask_session.modified = True
+    return jsonify({"message": "Cleared Flask-stored backend cookies."})
+
+
 @app.route("/proxy/<path:path>", methods=["GET", "POST", "PUT", "DELETE"])
 def proxy(path):
     backend_path = "/" + path
     url = BACKEND_URL + backend_path
+    backend_session = make_backend_session()
 
     try:
         if request.method == "GET":
-            response = backend_session.get(
-                url,
-                params=request.args,
-                timeout=15
-            )
-
+            response = backend_session.get(url, params=request.args, timeout=20)
         elif request.method == "POST":
-            response = backend_session.post(
-                url,
-                json=request.get_json(silent=True),
-                timeout=15
-            )
-
+            response = backend_session.post(url, json=request.get_json(silent=True), timeout=20)
         elif request.method == "PUT":
-            response = backend_session.put(
-                url,
-                json=request.get_json(silent=True),
-                timeout=15
-            )
-
+            response = backend_session.put(url, json=request.get_json(silent=True), timeout=20)
         elif request.method == "DELETE":
-            response = backend_session.delete(
-                url,
-                json=request.get_json(silent=True),
-                timeout=15
-            )
-
+            response = backend_session.delete(url, json=request.get_json(silent=True), timeout=20)
         else:
             return jsonify({"error": "Unsupported method"}), 405
+
+        save_backend_cookies(backend_session)
+
+        # If backend logout clears its cookie, also clear our stored cookie jar.
+        if path == "api/auth/logout" and request.method == "POST" and response.status_code < 400:
+            flask_session.pop("backend_cookies", None)
+            flask_session.modified = True
 
         try:
             data = response.json()
@@ -788,7 +789,7 @@ def proxy(path):
     except requests.exceptions.Timeout:
         return jsonify({
             "error": "Backend request timed out.",
-            "detail": "This may happen if SMTP email sending is hanging."
+            "detail": "The backend did not respond before the Flask proxy timeout."
         }), 504
 
     except Exception as e:

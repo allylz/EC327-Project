@@ -1,7 +1,7 @@
 # dependencies
 node_modules/
 backend/node_modules/
-
+deploy.sh
 # environment variables / secrets
 .env
 .env.*

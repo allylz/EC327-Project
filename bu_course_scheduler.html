@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BU Course Scheduler</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:       #1a56db;
+      --blue-dark:  #1648c4;
+      --blue-light: #eff6ff;
+      --green:      #16a34a;
+      --red:        #dc2626;
+      --red-light:  #fef2f2;
+      --gray-50:    #f9fafb;
+      --gray-100:   #f3f4f6;
+      --gray-200:   #e5e7eb;
+      --gray-400:   #9ca3af;
+      --gray-600:   #4b5563;
+      --gray-900:   #111827;
+      --radius:     12px;
+      --radius-sm:  8px;
+    }
+
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: #f0f2f5;
+      color: var(--gray-900);
+      min-height: 100vh;
+    }
+
+    /* ─── Pages ─────────────────────────────────── */
+    .page { display: none; min-height: 100vh; }
+    .page.active { display: flex; flex-direction: column; }
+
+    /* ─── Flash messages ─────────────────────────── */
+    .flash-list { list-style: none; position: fixed; top: 16px; right: 16px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+    .flash { padding: 11px 16px; border-radius: var(--radius-sm); font-size: 13.5px; font-weight: 500; max-width: 320px; animation: slideIn .2s ease; }
+    .flash.success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; }
+    .flash.error   { background: var(--red-light); border: 1px solid #fecaca; color: var(--red); }
+    .flash.info    { background: var(--blue-light); border: 1px solid #bfdbfe; color: var(--blue); }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+
+    /* ─── Auth layout ────────────────────────────── */
+    .auth-page {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+    }
+    .auth-wrap { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 20px; }
+
+    .auth-logo { display: flex; align-items: center; gap: 10px; justify-content: center; }
+    .auth-logo-icon {
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      background: var(--blue);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .auth-logo-name { font-size: 18px; font-weight: 600; color: var(--gray-900); letter-spacing: -.3px; }
+
+    .auth-card {
+      background: #fff;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .auth-card-header { display: flex; flex-direction: column; gap: 4px; }
+    .auth-card-title  { font-size: 20px; font-weight: 600; color: var(--gray-900); letter-spacing: -.4px; }
+    .auth-card-sub    { font-size: 13px; color: var(--gray-400); }
+
+    .auth-footer { text-align: center; font-size: 13px; color: var(--gray-400); }
+    .auth-footer a { color: var(--blue); text-decoration: none; font-weight: 500; }
+    .auth-footer a:hover { text-decoration: underline; }
+
+    /* ─── Form elements ──────────────────────────── */
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 12px; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: .5px; }
+    .field input {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-family: inherit;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-sm);
+      background: var(--gray-50);
+      color: var(--gray-900);
+      outline: none;
+      transition: border-color .12s, box-shadow .12s, background .12s;
+      -webkit-appearance: none;
+    }
+    .field input:focus {
+      border-color: var(--blue);
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(26,86,219,.10);
+    }
+    .field input::placeholder { color: #c4c9d4; }
+    .field-row { display: flex; align-items: center; justify-content: space-between; }
+    .field-link { font-size: 12.5px; color: var(--blue); background: none; border: none; cursor: pointer; font-family: inherit; }
+    .field-link:hover { text-decoration: underline; }
+
+    /* ─── Buttons ────────────────────────────────── */
+    .btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; padding: 11px 16px;
+      font-size: 14px; font-weight: 600; font-family: inherit;
+      border-radius: var(--radius-sm); border: none; cursor: pointer;
+      transition: background .12s, transform .08s;
+      text-decoration: none;
+      letter-spacing: -.1px;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover { background: var(--blue-dark); }
+    .btn-success { background: var(--green); color: #fff; }
+    .btn-success:hover { background: #148d41; }
+    .btn-ghost { background: var(--gray-100); color: var(--gray-600); border: 1px solid var(--gray-200); font-weight: 500; }
+    .btn-ghost:hover { background: var(--gray-200); }
+
+    .divider { display: flex; align-items: center; gap: 10px; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--gray-200); }
+    .divider span { font-size: 12px; color: var(--gray-400); }
+
+    /* ─── OTP code input ─────────────────────────── */
+    .code-input {
+      letter-spacing: 6px !important;
+      font-size: 20px !important;
+      text-align: center;
+      font-weight: 600;
+    }
+
+    /* ─── Step indicator ─────────────────────────── */
+    .steps { display: flex; align-items: center; }
+    .step { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray-400); }
+    .step-num {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--gray-100); border: 1px solid var(--gray-200);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600; color: var(--gray-400);
+    }
+    .step.active .step-num { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .step.active { color: var(--gray-900); font-weight: 500; }
+    .step.done .step-num { background: var(--green); border-color: var(--green); color: #fff; }
+    .step-line { flex: 1; height: 1px; background: var(--gray-200); margin: 0 6px; }
+
+    /* ─── Dashboard ──────────────────────────────── */
+    .dash-nav {
+      background: #fff;
+      border-bottom: 1px solid var(--gray-200);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .dash-nav-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+    .dash-nav-logo-icon {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: var(--blue);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .dash-nav-logo-name { font-size: 14px; font-weight: 600; color: var(--gray-900); }
+    .dash-nav-right { display: flex; align-items: center; gap: 12px; }
+    .dash-user-name { font-size: 13px; font-weight: 500; color: var(--gray-600); }
+    .dash-user-pill {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--blue-light); border: 1px solid #bfdbfe;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 600; color: var(--blue);
+    }
+    .dash-logout {
+      font-size: 13px; font-weight: 500; color: var(--gray-400);
+      background: none; border: none; cursor: pointer; font-family: inherit;
+      padding: 6px 10px; border-radius: var(--radius-sm);
+      transition: background .12s, color .12s;
+    }
+    .dash-logout:hover { background: var(--gray-100); color: var(--gray-900); }
+
+    .dash-body { flex: 1; padding: 32px 24px; max-width: 1100px; margin: 0 auto; width: 100%; }
+
+    .dash-greeting { font-size: 22px; font-weight: 600; color: var(--gray-900); letter-spacing: -.4px; margin-bottom: 6px; }
+    .dash-greeting-sub { font-size: 14px; color: var(--gray-400); margin-bottom: 28px; }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 28px; }
+    .stat-card { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 16px 18px; }
+    .stat-label { font-size: 11px; font-weight: 600; color: var(--gray-400); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .stat-value { font-size: 24px; font-weight: 600; color: var(--gray-900); letter-spacing: -.5px; }
+    .stat-sub   { font-size: 12px; color: var(--gray-400); margin-top: 3px; }
+
+    .dash-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 700px) { .dash-cols { grid-template-columns: 1fr; } }
+
+    .panel { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: hidden; }
+    .panel-header {
+      padding: 16px 18px 14px; border-bottom: 1px solid var(--gray-100);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .panel-title { font-size: 14px; font-weight: 600; color: var(--gray-900); }
+    .panel-action { font-size: 12.5px; color: var(--blue); text-decoration: none; font-weight: 500; }
+    .panel-action:hover { text-decoration: underline; }
+    .panel-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+
+    .search-row { display: flex; gap: 8px; }
+    .search-input {
+      flex: 1; padding: 9px 12px; font-size: 13.5px; font-family: inherit;
+      border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+      background: var(--gray-50); color: var(--gray-900); outline: none;
+      transition: border-color .12s, box-shadow .12s;
+    }
+    .search-input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(26,86,219,.10); background: #fff; }
+    .search-input::placeholder { color: #c4c9d4; }
+    .search-btn {
+      padding: 9px 14px; background: var(--blue); color: #fff;
+      border: none; border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 600; font-family: inherit;
+      cursor: pointer; transition: background .12s; white-space: nowrap;
+    }
+    .search-btn:hover { background: var(--blue-dark); }
+
+    .results-box {
+      font-size: 13px; color: var(--gray-400); padding: 12px;
+      background: var(--gray-50); border: 1px solid var(--gray-200);
+      border-radius: var(--radius-sm); min-height: 60px; line-height: 1.5;
+    }
+    .result-item {
+      padding: 9px 11px; background: #fff;
+      border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+      font-size: 13px; color: var(--gray-900); cursor: pointer;
+      transition: background .1s; display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .result-item:last-child { margin-bottom: 0; }
+    .result-item:hover { background: var(--blue-light); border-color: #bfdbfe; }
+    .result-code { font-size: 11px; font-weight: 600; color: var(--blue); }
+
+    .schedule-empty { font-size: 13px; color: var(--gray-400); text-align: center; padding: 24px 0; }
+    .schedule-course {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 0; border-bottom: 1px solid var(--gray-100); font-size: 13px;
+    }
+    .schedule-course:last-child { border-bottom: none; }
+    .schedule-course-code { font-weight: 600; color: var(--gray-900); font-size: 12.5px; }
+    .schedule-course-term { font-size: 11.5px; color: var(--gray-400); }
+
+    .api-box {
+      background: #1a1d23; border-radius: var(--radius-sm); padding: 14px;
+      font-family: 'Courier New', monospace; font-size: 12px; color: #a3e635;
+      max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     FLASH MESSAGES (demo)
+═══════════════════════════════════════════════ -->
+<ul class="flash-list" id="flash-list"></ul>
+
+<!-- ══════════════════════════════════════════════
+     PAGE: LOGIN
+═══════════════════════════════════════════════ -->
+<div class="page active" id="page-login">
+  <div class="auth-page">
+    <div class="auth-wrap">
+
+      <div class="auth-logo">
+        <div class="auth-logo-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M4 17L10 4L16 17" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6.5 12.5h7" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="auth-logo-name">BU Course Scheduler</span>
+      </div>
+
+      <div class="auth-card">
+        <div class="auth-card-header">
+          <div class="auth-card-title">Welcome back</div>
+          <div class="auth-card-sub">Sign in to your BU account</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="field">
+            <label for="login-email">BU Email</label>
+            <input type="email" id="login-email" placeholder="you@bu.edu" autocomplete="email" />
+          </div>
+          <div class="field">
+            <div class="field-row">
+              <label for="login-password">Password</label>
+              <button class="field-link" onclick="navigate('forgot')">Forgot password?</button>
+            </div>
+            <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+          </div>
+          <button id="login-btn" class="btn btn-primary" onclick="handleLogin()">Login</button>
+        </div>
+
+        <div class="divider"><span>or</span></div>
+        <button class="btn btn-ghost" onclick="handleLogout()">Logout current session</button>
+      </div>
+
+      <div class="auth-footer">
+        Don't have an account? <a href="#" onclick="navigate('register'); return false;">Create one</a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGE: REGISTER
+═══════════════════════════════════════════════ -->
+<div class="page" id="page-register">
+  <div class="auth-page">
+    <div class="auth-wrap">
+
+      <div class="auth-logo">
+        <div class="auth-logo-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M4 17L10 4L16 17" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6.5 12.5h7" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="auth-logo-name">BU Course Scheduler</span>
+      </div>
+
+      <div class="steps">
+        <div class="step active"><div class="step-num">1</div>Create account</div>
+        <div class="step-line"></div>
+        <div class="step"><div class="step-num">2</div>Verify email</div>
+        <div class="step-line"></div>
+        <div class="step"><div class="step-num">3</div>Login</div>
+      </div>
+
+      <div class="auth-card">
+        <div class="auth-card-header">
+          <div class="auth-card-title">Create your account</div>
+          <div class="auth-card-sub">Use your BU email address to get started</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="field">
+            <label for="reg-email">BU Email</label>
+            <input type="email" id="reg-email" placeholder="you@bu.edu" autocomplete="email" />
+          </div>
+          <div class="field">
+            <label for="reg-password">Password</label>
+            <input type="password" id="reg-password" placeholder="Min. 8 characters" autocomplete="new-password" />
+          </div>
+          <div class="field">
+            <label for="reg-name">Display name</label>
+            <input type="text" id="reg-name" placeholder="Your name" autocomplete="name" />
+          </div>
+          <button id="reg-btn" class="btn btn-primary" onclick="handleRegister()">Create account</button>
+        </div>
+      </div>
+
+      <div class="auth-footer">
+        Already have an account? <a href="#" onclick="navigate('login'); return false;">Login</a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGE: VERIFY EMAIL
+═══════════════════════════════════════════════ -->
+<div class="page" id="page-verify">
+  <div class="auth-page">
+    <div class="auth-wrap">
+
+      <div class="auth-logo">
+        <div class="auth-logo-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M4 17L10 4L16 17" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6.5 12.5h7" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="auth-logo-name">BU Course Scheduler</span>
+      </div>
+
+      <div class="steps">
+        <div class="step done"><div class="step-num">✓</div>Create account</div>
+        <div class="step-line"></div>
+        <div class="step active"><div class="step-num">2</div>Verify email</div>
+        <div class="step-line"></div>
+        <div class="step"><div class="step-num">3</div>Login</div>
+      </div>
+
+      <div class="auth-card">
+        <div class="auth-card-header">
+          <div class="auth-card-title">Check your inbox</div>
+          <div class="auth-card-sub">
+            We sent a 6-digit code to <strong id="verify-email-label">your BU email</strong>.
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="field">
+            <label for="verify-email">BU Email</label>
+            <input type="email" id="verify-email" placeholder="you@bu.edu" />
+          </div>
+          <div class="field">
+            <label for="verify-code">Verification code</label>
+            <input class="code-input" type="text" id="verify-code" placeholder="000000" maxlength="6" autocomplete="one-time-code" />
+          </div>
+          <button id="verify-btn" class="btn btn-primary" onclick="handleVerify()">Verify email</button>
+        </div>
+
+        <div class="divider"><span>didn't get it?</span></div>
+        <button id="resend-btn" class="btn btn-ghost" onclick="handleResend()">Resend verification code</button>
+      </div>
+
+      <div class="auth-footer">
+        Wrong account? <a href="#" onclick="navigate('register'); return false;">Start over</a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGE: FORGOT PASSWORD
+═══════════════════════════════════════════════ -->
+<div class="page" id="page-forgot">
+  <div class="auth-page">
+    <div class="auth-wrap">
+
+      <div class="auth-logo">
+        <div class="auth-logo-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M4 17L10 4L16 17" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6.5 12.5h7" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="auth-logo-name">BU Course Scheduler</span>
+      </div>
+
+      <!-- Step 1: request code -->
+      <div class="auth-card" id="fp-step1">
+        <div class="auth-card-header">
+          <div class="auth-card-title">Reset your password</div>
+          <div class="auth-card-sub">Enter your BU email and we'll send a reset code.</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="field">
+            <label for="fp-email">BU Email</label>
+            <input type="email" id="fp-email" placeholder="you@bu.edu" />
+          </div>
+          <button id="fp-btn1" class="btn btn-primary" onclick="handleForgotStep1()">Send reset code</button>
+        </div>
+      </div>
+
+      <!-- Step 2: enter code + new password -->
+      <div class="auth-card" id="fp-step2" style="display:none;">
+        <div class="auth-card-header">
+          <div class="auth-card-title">Enter your reset code</div>
+          <div class="auth-card-sub">Check your inbox for the 6-digit code.</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="field">
+            <label for="fp-email2">BU Email</label>
+            <input type="email" id="fp-email2" placeholder="you@bu.edu" />
+          </div>
+          <div class="field">
+            <label for="fp-code">Reset code</label>
+            <input class="code-input" type="text" id="fp-code" placeholder="000000" maxlength="6" autocomplete="one-time-code" />
+          </div>
+          <div class="field">
+            <label for="fp-newpass">New password</label>
+            <input type="password" id="fp-newpass" placeholder="Min. 8 characters" autocomplete="new-password" />
+          </div>
+          <button id="fp-btn2" class="btn btn-success" onclick="handleForgotStep2()">Reset password</button>
+        </div>
+        <div class="divider"><span>or</span></div>
+        <button class="btn btn-ghost" onclick="showFpStep(1)">Request a new code</button>
+      </div>
+
+      <div class="auth-footer">
+        Remembered it? <a href="#" onclick="navigate('login'); return false;">Back to login</a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGE: DASHBOARD
+═══════════════════════════════════════════════ -->
+<div class="page" id="page-dashboard">
+
+  <nav class="dash-nav">
+    <a href="#" class="dash-nav-logo" onclick="return false;">
+      <div class="dash-nav-logo-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M3 14L8 3L13 14" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M5 10h6" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="dash-nav-logo-name">BU Course Scheduler</span>
+    </a>
+    <div class="dash-nav-right">
+      <span class="dash-user-name" id="dash-user-name">—</span>
+      <div class="dash-user-pill" id="dash-user-pill">—</div>
+      <button class="dash-logout" onclick="handleLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <main class="dash-body">
+
+    <div class="dash-greeting" id="dash-greeting">Good to see you 👋</div>
+    <div class="dash-greeting-sub" id="dash-greeting-sub"></div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Schedule</div>
+        <div class="stat-value" id="stat-courses">—</div>
+        <div class="stat-sub">planned courses</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Terms</div>
+        <div class="stat-value" id="stat-terms">—</div>
+        <div class="stat-sub">semesters planned</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Major</div>
+        <div class="stat-value" id="stat-major" style="font-size:14px; padding-top:6px;">—</div>
+        <div class="stat-sub">&nbsp;</div>
+      </div>
+    </div>
+
+    <div class="dash-cols">
+
+      <!-- Course search -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Course search</span>
+        </div>
+        <div class="panel-body">
+          <div class="search-row">
+            <input class="search-input" type="text" id="course-search-input" placeholder="EC 327, Solovey, Open…" />
+            <button class="search-btn" onclick="searchCourses()">Search</button>
+          </div>
+          <div class="results-box" id="course-search-results">
+            Results appear here. Click a result to add it to the course palette.
+          </div>
+        </div>
+      </div>
+
+      <!-- Schedule preview -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">My schedule</span>
+          <a href="#" class="panel-action" onclick="return false;">Open builder →</a>
+        </div>
+        <div class="panel-body" id="schedule-preview">
+          <div class="schedule-empty">Loading schedule…</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- API response -->
+    <div style="margin-top: 16px;">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">API response</span>
+          <button onclick="document.getElementById('api-box').textContent='No response yet.'"
+                  style="font-size:12px; color:var(--gray-400); background:none; border:none; cursor:pointer; font-family:inherit;">Clear</button>
+        </div>
+        <div class="panel-body">
+          <div class="api-box" id="api-box">No response yet.</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     JAVASCRIPT — wired to real backend
+═══════════════════════════════════════════════ -->
+<script>
+  /* ─────────────────────────────────────────────
+     CONFIG — swap BASE_URL for production
+  ───────────────────────────────────────────── */
+  const BASE_URL = 'http://auth.851216135.xyz';
+
+  /* ── State ──────────────────────────────────── */
+  let currentUser = null;
+
+  /* ── Core fetch helper ──────────────────────── */
+  async function api(method, path, body) {
+    const opts = {
+      method,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(BASE_URL + path, opts);
+    const data = await res.json().catch(() => ({}));
+    showApiBox({ status: res.status, ...data });
+    return { ok: res.ok, status: res.status, data };
+  }
+
+  /* ── Navigation ─────────────────────────────── */
+  function navigate(page) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + page).classList.add('active');
+    window.scrollTo(0, 0);
+  }
+
+  /* ── Flash messages ─────────────────────────── */
+  function flash(msg, type = 'info') {
+    const list = document.getElementById('flash-list');
+    const li = document.createElement('li');
+    li.className = 'flash ' + type;
+    li.textContent = msg;
+    list.appendChild(li);
+    setTimeout(() => {
+      li.style.opacity = '0';
+      li.style.transition = 'opacity .4s';
+      setTimeout(() => li.remove(), 400);
+    }, 4000);
+  }
+
+  /* ── API response box ───────────────────────── */
+  function showApiBox(data) {
+    const el = document.getElementById('api-box');
+    if (el) el.textContent = JSON.stringify(data, null, 2);
+  }
+
+  /* ── devCode banner ─────────────────────────── */
+  /* Shows a highlighted banner when the backend returns devCode
+     (development mode with SKIP_EMAIL=true or NODE_ENV=development) */
+  function showDevCode(code, targetInputId) {
+    const existing = document.getElementById('dev-code-banner');
+    if (existing) existing.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'dev-code-banner';
+    banner.style.cssText = `
+      background: #fefce8; border: 1px solid #fde047; border-radius: 8px;
+      padding: 12px 14px; font-size: 13px; color: #713f12;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    `;
+    banner.innerHTML = `
+      <span>📬 <strong>Dev mode</strong> — email not sent. Code: <strong style="font-family:monospace;font-size:15px;letter-spacing:3px;">${code}</strong></span>
+      <button onclick="
+        document.getElementById('${targetInputId}').value='${code}';
+        document.getElementById('dev-code-banner').remove();
+      " style="
+        padding: 5px 10px; background: #fde047; border: none; border-radius: 6px;
+        font-size: 12px; font-weight: 600; cursor: pointer; color: #713f12; font-family: inherit;
+        white-space: nowrap;
+      ">Fill in</button>
+    `;
+
+    // Insert banner inside whichever auth-card is visible
+    const activeCard = document.querySelector('.page.active .auth-card');
+    if (activeCard) {
+      activeCard.appendChild(banner);
+    }
+  }
+
+  /* ── setBtn: loading state helper ──────────────*/
+  function setBtn(id, loading, label) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.textContent = loading ? 'Loading…' : label;
+  }
+
+  /* Yield one animation frame so the browser can repaint before a fetch blocks */
+  function tick() { return new Promise(r => requestAnimationFrame(r)); }
+
+  /* ══════════════════════════════════════════════
+     AUTH HANDLERS
+  ══════════════════════════════════════════════ */
+
+  /* ── Register ── POST /api/auth/register ──────── */
+  async function handleRegister() {
+    const email    = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const name     = document.getElementById('reg-name').value.trim();
+    if (!email || !password) { flash('Please fill in email and password.', 'error'); return; }
+
+    setBtn('reg-btn', true, 'Create account');
+    await tick();
+    const { ok, status, data } = await api('POST', '/api/auth/register', {
+      email, password, displayName: name || undefined,
+    });
+    setBtn('reg-btn', false, 'Create account');
+
+    if (ok) {
+      flash('Account created! Check your email for a verification code.', 'success');
+      setVerifyEmail(email);
+      navigate('verify');
+      if (data.devCode) showDevCode(data.devCode, 'verify-code');
+    } else if (status === 409) {
+      flash('An account with that email already exists.', 'error');
+    } else {
+      flash(data.error || 'Registration failed.', 'error');
+    }
+  }
+
+  /* ── Login ── POST /api/auth/login ──────────────*/
+  async function handleLogin() {
+    const email    = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!email || !password) { flash('Please fill in all fields.', 'error'); return; }
+
+    setBtn('login-btn', true, 'Login');
+    await tick();
+    const { ok, status, data } = await api('POST', '/api/auth/login', { email, password });
+    setBtn('login-btn', false, 'Login');
+
+    if (ok) {
+      currentUser = data.user;
+      flash('Logged in successfully.', 'success');
+      await loadDashboard();
+      navigate('dashboard');
+    } else if (status === 403) {
+      flash('Please verify your email first.', 'error');
+      setVerifyEmail(email);
+      navigate('verify');
+    } else {
+      flash(data.error || 'Login failed.', 'error');
+    }
+  }
+
+  /* ── Logout ── POST /api/auth/logout ────────────*/
+  async function handleLogout() {
+    await api('POST', '/api/auth/logout');
+    currentUser = null;
+    flash("You've been logged out.", 'info');
+    navigate('login');
+  }
+
+  /* ── Verify email ── POST /api/auth/verify-email */
+  function setVerifyEmail(email) {
+    document.getElementById('verify-email').value = email;
+    document.getElementById('verify-email-label').textContent = email || 'your BU email';
+  }
+
+  async function handleVerify() {
+    const email = document.getElementById('verify-email').value.trim();
+    const code  = document.getElementById('verify-code').value.trim();
+    if (!email || !code) { flash('Please fill in all fields.', 'error'); return; }
+
+    setBtn('verify-btn', true, 'Verify email');
+    await tick();
+    const { ok, data } = await api('POST', '/api/auth/verify-email', { email, code });
+    setBtn('verify-btn', false, 'Verify email');
+
+    if (ok) {
+      flash('Email verified! You can now log in.', 'success');
+      const banner = document.getElementById('dev-code-banner');
+      if (banner) banner.remove();
+      navigate('login');
+    } else {
+      flash(data.error || 'Verification failed.', 'error');
+    }
+  }
+
+  /* ── Resend code ── POST /api/auth/resend-verification-code */
+  async function handleResend() {
+    const email = document.getElementById('verify-email').value.trim();
+    if (!email) { flash('Please enter your email first.', 'error'); return; }
+
+    setBtn('resend-btn', true, 'Resend verification code');
+    await tick();
+    const { ok, data } = await api('POST', '/api/auth/resend-verification-code', { email });
+    setBtn('resend-btn', false, 'Resend verification code');
+
+    if (ok) {
+      flash('A new verification code has been sent.', 'success');
+      if (data.devCode) showDevCode(data.devCode, 'verify-code');
+    } else {
+      flash(data.error || 'Could not resend code.', 'error');
+    }
+  }
+
+  /* ── Forgot password step 1 ── POST /api/auth/forgot-password */
+  function showFpStep(n) {
+    document.getElementById('fp-step1').style.display = n === 1 ? 'flex' : 'none';
+    document.getElementById('fp-step2').style.display = n === 2 ? 'flex' : 'none';
+    const banner = document.getElementById('dev-code-banner');
+    if (banner) banner.remove();
+  }
+
+  async function handleForgotStep1() {
+    const email = document.getElementById('fp-email').value.trim();
+    if (!email) { flash('Please enter your BU email.', 'error'); return; }
+
+    setBtn('fp-btn1', true, 'Send reset code');
+    await tick();
+    const { ok, data } = await api('POST', '/api/auth/forgot-password', { email });
+    setBtn('fp-btn1', false, 'Send reset code');
+
+    if (ok) {
+      document.getElementById('fp-email2').value = email;
+      flash('Reset code sent — check your inbox.', 'success');
+      showFpStep(2);
+      if (data.devCode) showDevCode(data.devCode, 'fp-code');
+    } else {
+      flash(data.error || 'Could not send reset code.', 'error');
+    }
+  }
+
+  /* ── Forgot password step 2 ── POST /api/auth/reset-password */
+  async function handleForgotStep2() {
+    const email      = document.getElementById('fp-email2').value.trim();
+    const code       = document.getElementById('fp-code').value.trim();
+    const newPassword = document.getElementById('fp-newpass').value;
+    if (!email || !code || !newPassword) { flash('Please fill in all fields.', 'error'); return; }
+
+    setBtn('fp-btn2', true, 'Reset password');
+    await tick();
+    const { ok, data } = await api('POST', '/api/auth/reset-password', { email, code, newPassword });
+    setBtn('fp-btn2', false, 'Reset password');
+
+    if (ok) {
+      flash('Password reset! You can now log in with your new password.', 'success');
+      showFpStep(1);
+      navigate('login');
+    } else {
+      flash(data.error || 'Reset failed.', 'error');
+    }
+  }
+
+  /* ══════════════════════════════════════════════
+     DASHBOARD
+  ══════════════════════════════════════════════ */
+
+  async function loadDashboard() {
+    // Re-fetch /api/auth/me to get fresh user in case of page reload
+    if (!currentUser) {
+      const { data } = await api('GET', '/api/auth/me');
+      currentUser = data.user;
+    }
+    if (!currentUser) { navigate('login'); return; }
+
+    const name    = currentUser.displayName || currentUser.email;
+    const initial = name[0].toUpperCase();
+    document.getElementById('dash-user-name').textContent = name;
+    document.getElementById('dash-user-pill').textContent = initial;
+    document.getElementById('dash-greeting').textContent  = 'Good to see you, ' + name.split(' ')[0] + ' 👋';
+    document.getElementById('dash-greeting-sub').textContent = currentUser.email;
+
+    loadSchedulePreview();
+  }
+
+  async function loadSchedulePreview() {
+    const preview = document.getElementById('schedule-preview');
+    preview.innerHTML = '<div class="schedule-empty">Loading schedule…</div>';
+
+    const { ok, data } = await api('GET', '/api/my-schedule');
+
+    if (!ok || !data.schedule) {
+      preview.innerHTML = '<div class="schedule-empty">No schedule yet.</div>';
+      document.getElementById('stat-courses').textContent = '0';
+      document.getElementById('stat-terms').textContent   = '0';
+      document.getElementById('stat-major').textContent   = '—';
+      return;
+    }
+
+    const s        = data.schedule;
+    const terms    = s.terms || {};
+    const termKeys = Object.keys(terms);
+    let totalCourses = 0;
+    termKeys.forEach(t => { totalCourses += (terms[t] || []).length; });
+
+    document.getElementById('stat-courses').textContent = totalCourses;
+    document.getElementById('stat-terms').textContent   = termKeys.length;
+    document.getElementById('stat-major').textContent   = s.major || '—';
+
+    if (totalCourses === 0) {
+      preview.innerHTML = '<div class="schedule-empty">No courses added yet.</div>';
+      return;
+    }
+
+    let html  = '';
+    let shown = 0;
+    for (const term of termKeys) {
+      for (const course of (terms[term] || [])) {
+        if (shown >= 6) break;
+        html += `<div class="schedule-course">
+          <div>
+            <div class="schedule-course-code">${course.course_code}</div>
+            ${course.course_title ? `<div style="font-size:12px;color:var(--gray-400);">${course.course_title}</div>` : ''}
+          </div>
+          <div class="schedule-course-term">${term}</div>
+        </div>`;
+        shown++;
+      }
+    }
+    if (totalCourses > 6) {
+      html += `<div style="font-size:12px;color:var(--gray-400);text-align:center;padding-top:6px;">+${totalCourses - 6} more</div>`;
+    }
+    preview.innerHTML = html;
+  }
+
+  /* ── Course search ── GET /api/courses?q= ────── */
+  async function searchCourses() {
+    const q   = document.getElementById('course-search-input').value.trim();
+    const box = document.getElementById('course-search-results');
+    if (!q) return;
+
+    box.textContent = 'Searching…';
+    const { ok, data } = await api('GET', `/api/courses?q=${encodeURIComponent(q)}`);
+
+    if (!ok) { box.textContent = 'Search failed.'; return; }
+    if (!data.results || data.results.length === 0) { box.textContent = 'No results found.'; return; }
+
+    box.innerHTML = data.results.slice(0, 8).map(c => `
+      <div class="result-item" onclick="flash('${c.course_code} added to palette!', 'success')">
+        <span>${c.course_title || c.course_code}</span>
+        <span class="result-code">${c.course_code}</span>
+      </div>`
+    ).join('');
+  }
+
+  /* ── On load: check if already logged in ────── */
+  document.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('course-search-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') searchCourses();
+    });
+
+    // Quietly check session — if already logged in, go straight to dashboard
+    try {
+      const { data } = await api('GET', '/api/auth/me');
+      if (data.user) {
+        currentUser = data.user;
+        await loadDashboard();
+        navigate('dashboard');
+      }
+    } catch (_) { /* backend not reachable — stay on login */ }
+  });
+</script>
+
+</body>
+</html>

@@ -533,6 +533,52 @@ MAJOR_DATA = {
 }
 
 
+# Expand technical/elective searchable option lists so the UI can search the actual planning-sheet
+# option pools for the selected major. These are still labels from the uploaded PPS sheets;
+# broad categories remain when the sheet allows broad categories rather than naming every course.
+def _unique_options(*lists):
+    out = []
+    seen = set()
+    for lst in lists:
+        for item in lst:
+            key = item.strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                out.append(item)
+    return out
+
+# EE technical electives may include all EC courses, ENG BE 209, many ENG BE/EK/ME 300+ courses,
+# and the outside approved list. Include the named EC core/computer options so the searchable
+# dropdown is useful instead of only showing the outside-course exceptions.
+MAJOR_DATA["Electrical Engineering"]["dropdowns"]["Technical Elective"] = _unique_options(
+    MAJOR_DATA["Electrical Engineering"]["dropdowns"].get("EE Core Elective", []),
+    MAJOR_DATA["Electrical Engineering"]["dropdowns"].get("Computer Elective", []),
+    MAJOR_DATA["Electrical Engineering"]["dropdowns"].get("Technical Elective", []),
+)
+
+# CE technical electives may include any CE elective, plus other approved engineering/outside courses.
+MAJOR_DATA["Computer Engineering"]["dropdowns"]["Technical Elective"] = _unique_options(
+    MAJOR_DATA["Computer Engineering"]["dropdowns"].get("Computer Engineering Elective", []),
+    MAJOR_DATA["Computer Engineering"]["dropdowns"].get("CE Core Elective", []),
+    MAJOR_DATA["Computer Engineering"]["dropdowns"].get("EE Breadth Elective", []),
+    [x for x in MAJOR_DATA["Computer Engineering"]["dropdowns"].get("Technical Elective", []) if x != "Any Computer Engineering Elective"],
+)
+
+# ME calls this requirement Advanced Elective on the planning sheet. Add a Technical Elective
+# alias so the UI behaves consistently when users search for technical-style electives.
+MAJOR_DATA["Mechanical Engineering"]["dropdowns"]["Technical Elective"] = MAJOR_DATA["Mechanical Engineering"]["dropdowns"].get("Advanced Elective", [])
+
+# BME does not label a slot as Technical Elective on the PPS, but the professional/elective
+# pools are the practical searchable technical choices for BME.
+MAJOR_DATA["Biomedical Engineering"]["dropdowns"]["Technical Elective"] = _unique_options(
+    MAJOR_DATA["Biomedical Engineering"]["dropdowns"].get("Professional Elective", []),
+    MAJOR_DATA["Biomedical Engineering"]["dropdowns"].get("ENG Elective", []),
+    MAJOR_DATA["Biomedical Engineering"]["dropdowns"].get("BME Elective", []),
+    MAJOR_DATA["Biomedical Engineering"]["dropdowns"].get("BME Design Elective", []),
+    MAJOR_DATA["Biomedical Engineering"]["dropdowns"].get("Fields Elective", []),
+)
+
+
 def make_backend_session():
     """Create a requests session and load this browser user's saved backend cookies."""
     s = requests.Session()
@@ -621,32 +667,32 @@ BASE_HTML = r"""
     }
 
     main {
-      padding: 20px;
-      max-width: 1500px;
+      padding: 12px;
+      max-width: 1280px;
       margin: 0 auto;
     }
 
     section, .panel {
       background: var(--panel);
-      border-radius: 14px;
-      padding: 16px;
+      border-radius: 12px;
+      padding: 12px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-      margin-bottom: 18px;
+      margin-bottom: 12px;
     }
 
-    h2 { margin-top: 0; }
-    h3 { margin-bottom: 8px; }
+    h2 { margin: 0 0 8px; font-size: 18px; }
+    h3 { margin: 8px 0 6px; font-size: 14px; }
 
     input, textarea, button, select {
       width: 100%;
-      padding: 9px;
-      margin: 5px 0;
+      padding: 7px 8px;
+      margin: 4px 0;
       border-radius: 8px;
       border: 1px solid var(--border);
       font-size: 14px;
     }
 
-    textarea { min-height: 72px; resize: vertical; }
+    textarea { min-height: 54px; resize: vertical; }
 
     button {
       background: var(--blue);
@@ -676,8 +722,8 @@ BASE_HTML = r"""
 
     .builder-layout {
       display: grid;
-      grid-template-columns: 340px minmax(420px, 1fr) 340px;
-      gap: 18px;
+      grid-template-columns: 280px minmax(460px, 1fr) 300px;
+      gap: 12px;
       align-items: start;
     }
 
@@ -698,15 +744,15 @@ BASE_HTML = r"""
     .term-grid {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 12px;
-      margin-top: 12px;
+      gap: 8px;
+      margin-top: 8px;
     }
 
     .term-box {
-      min-height: 210px;
+      min-height: 112px;
       border: 2px dashed #cbd5e1;
-      border-radius: 14px;
-      padding: 10px;
+      border-radius: 12px;
+      padding: 8px;
       background: #f9fafb;
     }
 
@@ -717,7 +763,7 @@ BASE_HTML = r"""
 
     .term-title {
       font-weight: bold;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -727,13 +773,13 @@ BASE_HTML = r"""
     .course-card {
       background: #e0ecff;
       border: 1px solid #93c5fd;
-      border-radius: 10px;
-      padding: 9px;
-      margin: 8px 0;
+      border-radius: 9px;
+      padding: 7px 8px;
+      margin: 5px 0;
       cursor: grab;
       display: grid;
-      grid-template-columns: minmax(140px, 220px) 1fr auto;
-      gap: 10px;
+      grid-template-columns: minmax(155px, 230px) 1fr auto;
+      gap: 8px;
       align-items: center;
     }
 
@@ -747,12 +793,12 @@ BASE_HTML = r"""
     .required-bank {
       position: sticky;
       top: 12px;
-      max-height: calc(100vh - 140px);
+      max-height: calc(100vh - 100px);
       overflow: auto;
     }
 
     .required-group-title {
-      margin: 12px 0 4px;
+      margin: 10px 0 3px;
       font-weight: bold;
       font-size: 13px;
       color: #374151;
@@ -787,7 +833,7 @@ BASE_HTML = r"""
     .result-item:hover { background: #f3f4f6; }
 
     .scrollbox {
-      max-height: 320px;
+      max-height: 220px;
       overflow: auto;
       border: 1px solid var(--border);
       border-radius: 10px;
@@ -1017,7 +1063,7 @@ BUILD_CONTENT = r"""
       <textarea id="scheduleComments" placeholder="Schedule notes">Built in the unified Flask schedule builder.</textarea>
       <button class="success" onclick="saveSchedule()">Save/Update My Schedule</button>
       <button class="secondary" onclick="loadMySchedule()">Load My Existing Schedule</button>
-      <button class="secondary" onclick="loadRequiredPlan()">Reload Required Courses</button>
+      <button class="secondary" onclick="loadRequiredPlan()">Refresh Required List</button>
       <button class="secondary" onclick="previewSchedule()">Preview JSON</button>
     </section>
 
@@ -1058,7 +1104,7 @@ BUILD_CONTENT = r"""
         <input id="newTermCustom" placeholder="Optional custom label, e.g. Fifth Year Fall">
         <button onclick="addTermBox()">Add Semester Box</button>
       </div>
-      <p class="muted">Completed / Transferred is saved. Required-course cards on the right are only a draggable planning checklist and are not saved as a separate JSON bucket.</p>
+      <p class="muted">Only cards placed in semester boxes are saved. The right-side required list hides courses already placed.</p>
     </section>
 
     <section>
@@ -1075,7 +1121,7 @@ BUILD_CONTENT = r"""
   <div>
     <section class="required-bank">
       <h2>Required Courses</h2>
-      <p class="muted">Loaded from the selected major's program planning sheet. Drag these into the semester boxes. These cards are not saved unless you place them into your schedule.</p>
+      <p class="muted">Drag these into semesters. Already-placed requirements are hidden here.</p>
       <div id="requiredCourseBank"></div>
     </section>
   </div>
@@ -1198,6 +1244,7 @@ function removeTermBox(event, button) {
   }
   document.getElementById("coursePalette").append(...box.querySelectorAll(".course-card"));
   box.remove();
+  loadRequiredPlan();
 }
 
 function addTermBox() {
@@ -1213,27 +1260,64 @@ function loadRequiredPlan() {
   const bank = document.getElementById("requiredCourseBank");
   if (!bank) return;
 
+  // Count cards that are already placed in the user schedule. This prevents the
+  // right-side required-course bank from repeatedly showing requirements that the
+  // user has already dragged into a semester or Completed / Transferred.
+  const used = getPlacedRequirementCounts();
+
   bank.innerHTML = "";
   Object.entries(plan).forEach(([term, courses]) => {
     ensureTermBox(term);
     const group = document.createElement("div");
     group.className = "required-group";
     group.innerHTML = `<div class="required-group-title">${escapeHtml(term)}</div>`;
+
+    let visibleCount = 0;
     courses.forEach(([code, comment]) => {
+      const key = requirementKeyFromCode(code);
+      if ((used[key] || 0) > 0) {
+        used[key] -= 1;
+        return;
+      }
       group.appendChild(makeCourseCard({
         course_code: code,
         comments: comment,
         requirement_type: inferType(code),
         source_term: term
       }));
+      visibleCount += 1;
     });
-    bank.appendChild(group);
+
+    if (visibleCount > 0) bank.appendChild(group);
   });
+
+  if (!bank.children.length) {
+    bank.innerHTML = `<div class="muted" style="padding:8px;">All required courses for this major are already placed in your schedule boxes.</div>`;
+  }
 }
 
 function inferType(code) {
   if (code.includes("Elective")) return code;
   return "Required Course";
+}
+
+function requirementKeyFromCode(code) {
+  const raw = String(code || "").trim();
+  // A placed elective like "Technical Elective (ENG EC 414)" should count as a
+  // Technical Elective requirement from the planning sheet.
+  const parenIndex = raw.indexOf("(");
+  const base = parenIndex >= 0 ? raw.slice(0, parenIndex).trim() : raw;
+  return base.replace(/\s+/g, " ").toUpperCase();
+}
+
+function getPlacedRequirementCounts() {
+  const counts = {};
+  document.querySelectorAll("#termGrid .course-card").forEach(card => {
+    const key = requirementKeyFromCode(card.dataset.code || "");
+    if (!key) return;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return counts;
 }
 
 function makeCourseCard(course) {
@@ -1249,6 +1333,7 @@ function makeCourseCard(course) {
   card.dataset.comments = course.comments || "";
   card.dataset.requirementType = course.requirement_type || "";
   card.dataset.selectedCourse = course.selected_course_code || "";
+  card.dataset.sourceTerm = course.source_term || "";
   card.dataset.status = course.status || "planned";
 
   card.innerHTML = `
@@ -1294,11 +1379,13 @@ function markCompleted(event, button) {
   card.classList.add("completed");
   const completedBox = document.querySelector(`.term-box[data-term="Completed / Transferred"]`);
   completedBox.appendChild(card);
+  loadRequiredPlan();
 }
 
 function removeCard(event, button) {
   event.stopPropagation();
   button.closest(".course-card").remove();
+  loadRequiredPlan();
 }
 
 function dragCourse(event) {
@@ -1313,7 +1400,10 @@ function dropCourse(event) {
   event.preventDefault();
   const id = event.dataTransfer.getData("text/plain");
   const card = document.getElementById(id);
-  if (card) event.currentTarget.appendChild(card);
+  if (card) {
+    event.currentTarget.appendChild(card);
+    loadRequiredPlan();
+  }
 }
 
 function buildScheduleJson() {
@@ -1332,6 +1422,7 @@ function buildScheduleJson() {
         comments: card.dataset.comments || "",
         requirement_type: card.dataset.requirementType || "",
         selected_course_code: card.dataset.selectedCourse || "",
+        source_term: card.dataset.sourceTerm || "",
         status: card.dataset.status || "planned"
       });
     });
@@ -1361,11 +1452,10 @@ function renderSchedule(schedule) {
   document.getElementById("scheduleTitle").value = schedule.title || "";
   document.getElementById("scheduleMajor").value = schedule.major || Object.keys(MAJOR_DATA)[0];
   document.getElementById("scheduleComments").value = schedule.comments || "";
-  majorChanged();
+  updateRequirementDropdown();
 
   document.getElementById("termGrid").innerHTML = "";
   ensureTermBox("Completed / Transferred", true);
-  loadRequiredPlan();
 
   Object.entries(schedule.terms || {}).forEach(([term, courses]) => {
     if (term === "Required Courses") return;
@@ -1373,6 +1463,7 @@ function renderSchedule(schedule) {
     const box = document.querySelector(`.term-box[data-term="${cssEscape(term)}"]`);
     courses.forEach(c => box.appendChild(makeCourseCard(c)));
   });
+  loadRequiredPlan();
 }
 
 async function searchCourses() {

@@ -722,12 +722,82 @@ BASE_HTML = r"""
       gap: 10px;
     }
 
-    .builder-layout {
+    .builder-page {
+      width: calc(100vw - 24px);
+      max-width: none;
+      margin-left: calc(50% - 50vw + 12px);
+      margin-right: calc(50% - 50vw + 12px);
+    }
+
+    .builder-top {
+      margin-bottom: 10px;
+    }
+
+    .builder-workspace {
       display: grid;
-      grid-template-columns: minmax(260px, 340px) minmax(560px, 1fr) minmax(260px, 340px);
-      gap: 10px;
+      grid-template-columns: minmax(0, 2.2fr) minmax(300px, 0.9fr);
+      gap: 12px;
       align-items: start;
       width: 100%;
+    }
+
+    .schedule-side, .required-side {
+      min-width: 0;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .add-course-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 8px;
+      align-items: end;
+    }
+
+    .semester-control-row {
+      display: grid;
+      grid-template-columns: 220px 1fr 180px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    .button-row button {
+      width: auto;
+      min-width: 150px;
+    }
+
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #f9fafb;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .check-row input {
+      width: auto;
+      margin: 0;
+    }
+
+    .compact-section {
+      margin-bottom: 10px;
     }
 
     .muted { color: var(--muted); font-size: 13px; }
@@ -753,12 +823,16 @@ BASE_HTML = r"""
     }
 
     .term-box {
-      min-height: 112px;
+      min-height: 92px;
       border: 2px dashed #cbd5e1;
       border-radius: 12px;
       padding: 8px;
       background: #f9fafb;
       box-sizing: border-box;
+    }
+
+    .palette-box {
+      min-height: 70px;
     }
 
     .term-box.special {
@@ -779,12 +853,12 @@ BASE_HTML = r"""
       background: #e0ecff;
       border: 1px solid #93c5fd;
       border-radius: 9px;
-      padding: 7px 8px;
+      padding: 6px 7px;
       margin: 5px 0;
       cursor: grab;
       display: grid;
-      grid-template-columns: minmax(155px, 220px) minmax(200px, 1fr) auto;
-      gap: 8px;
+      grid-template-columns: minmax(145px, 200px) minmax(220px, 1fr) auto;
+      gap: 7px;
       align-items: center;
       width: 100%;
       box-sizing: border-box;
@@ -806,6 +880,21 @@ BASE_HTML = r"""
       padding: 5px 7px;
       font-size: 12px;
       background: white;
+      max-width: 100%;
+    }
+
+    .completed-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #374151;
+      white-space: nowrap;
+    }
+
+    .completed-toggle input {
+      width: auto;
+      margin: 0;
     }
 
     .course-actions {
@@ -888,13 +977,14 @@ BASE_HTML = r"""
     }
 
     @media (max-width: 1150px) {
-      .builder-layout {
+      .builder-workspace, .settings-grid, .add-course-grid, .semester-control-row {
         grid-template-columns: 1fr;
       }
       .required-bank {
         position: static;
         max-height: none;
       }
+      .button-row button { width: 100%; }
     }
 
     @media (max-width: 900px) {
@@ -1089,76 +1179,95 @@ window.addEventListener("load", loadEmailFields);
 """
 
 BUILD_CONTENT = r"""
-<div class="builder-layout">
-  <div>
-    <section>
-      <h2>Schedule Settings</h2>
-      <input id="scheduleTitle" value="My Four-Year Plan" placeholder="Schedule title">
-      <select id="scheduleMajor" onchange="majorChanged()"></select>
-      <textarea id="scheduleComments" placeholder="Schedule notes">Built in the unified Flask schedule builder.</textarea>
-      <button class="success" onclick="saveSchedule()">Save/Update My Schedule</button>
-      <button class="secondary" onclick="loadMySchedule()">Load My Existing Schedule</button>
-      <button class="secondary" onclick="loadRequiredPlan()">Refresh Required List</button>
-      <button class="secondary" onclick="previewSchedule()">Preview JSON</button>
-    </section>
-
-    <section>
-      <h2>Add Course</h2>
-      <label>Requirement type</label>
-      <select id="requirementType" onchange="requirementTypeChanged()"></select>
-
-      <label>Approved elective/core choice</label>
-      <input id="electiveChoiceSearch" list="electiveOptionsList" placeholder="Type to search approved options..." oninput="electiveChoiceChanged()">
-      <datalist id="electiveOptionsList"></datalist>
-      <div class="muted" id="electiveChoiceHint">Pick a requirement type first. The options come from the selected major's program planning sheet.</div>
-
-      <label>Manual course code or placeholder</label>
-      <input id="manualCourseCode" placeholder="Example: ENG EC 327 or Technical Elective">
-
-      <label>Course note</label>
-      <input id="manualCourseComment" placeholder="Optional comment">
-
-      <button onclick="addManualCourse()">Add to Course Palette</button>
-      <button class="secondary" onclick="searchCourses()">Search BU Course Data</button>
-      <input id="courseQuery" placeholder="Search course, instructor, Hub, status...">
-      <div id="courseResults" class="scrollbox"><div class="muted" style="padding:8px;">Course search results appear here.</div></div>
-    </section>
-
-    <section>
-      <h2>Course Palette</h2>
-      <p class="muted">Drag cards into semesters or into Completed / Transferred.</p>
-      <div id="coursePalette" class="term-box" ondrop="dropCourse(event)" ondragover="allowDrop(event)"></div>
-    </section>
-  </div>
-
-  <div>
-    <section>
-      <h2>Semester Controls</h2>
-      <div class="grid-3">
-        <select id="newTermLabel"></select>
-        <input id="newTermCustom" placeholder="Optional custom label, e.g. Fifth Year Fall">
-        <button onclick="addTermBox()">Add Semester Box</button>
+<div class="builder-page">
+  <section class="builder-top">
+    <div>
+      <h2>My Schedule Settings</h2>
+      <div class="settings-grid">
+        <input id="scheduleTitle" value="My Four-Year Plan" placeholder="Schedule title">
+        <select id="scheduleMajor" onchange="majorChanged()"></select>
+        <label class="check-row">
+          <input id="scheduleCompleted" type="checkbox">
+          <span>I am done with college / this plan is complete</span>
+        </label>
       </div>
-      <p class="muted">Only cards placed in semester boxes are saved. The right-side required list hides courses already placed.</p>
-    </section>
+      <textarea id="scheduleComments" placeholder="Schedule notes">Built in the unified Flask schedule builder.</textarea>
+      <div class="button-row">
+        <button class="success" onclick="saveSchedule()">Save/Update My Schedule</button>
+        <button class="secondary" onclick="loadMySchedule()">Load My Existing Schedule</button>
+        <button class="secondary" onclick="loadRequiredPlan()">Refresh Required List</button>
+        <button class="secondary" onclick="previewSchedule()">Preview JSON</button>
+      </div>
+    </div>
+  </section>
 
-    <section>
-      <h2>My Schedule Builder</h2>
-      <div id="termGrid" class="term-grid"></div>
-    </section>
+  <div class="builder-workspace">
+    <div class="schedule-side">
+      <section class="compact-section">
+        <h2>Add Course</h2>
+        <div class="add-course-grid">
+          <div>
+            <label>Requirement type</label>
+            <select id="requirementType" onchange="requirementTypeChanged()"></select>
+          </div>
+          <div>
+            <label>Approved elective/core choice</label>
+            <select id="electiveChoiceSelect" onchange="electiveChoiceChanged()">
+              <option value="">Pick a requirement type first</option>
+            </select>
+            <div class="muted" id="electiveChoiceHint">Pick a requirement type first. Options come from the selected major's planning sheet.</div>
+          </div>
+          <div>
+            <label>Manual course code or placeholder</label>
+            <input id="manualCourseCode" placeholder="Example: ENG EC 327 or Technical Elective">
+          </div>
+          <div>
+            <label>Course note</label>
+            <input id="manualCourseComment" placeholder="Optional comment">
+          </div>
+        </div>
+        <div class="button-row">
+          <button onclick="addManualCourse()">Add to Course Palette</button>
+          <button class="secondary" onclick="searchCourses()">Search BU Course Data</button>
+        </div>
+        <input id="courseQuery" placeholder="Search course, instructor, Hub, status...">
+        <div id="courseResults" class="scrollbox"><div class="muted" style="padding:8px;">Course search results appear here.</div></div>
+      </section>
 
-    <section>
-      <h2>Response</h2>
-      <pre id="responseBox" class="response-box">No response yet.</pre>
-    </section>
-  </div>
+      <section class="compact-section">
+        <h2>Course Palette</h2>
+        <p class="muted">Drag cards into semesters or into Completed / Transferred.</p>
+        <div id="coursePalette" class="term-box palette-box" ondrop="dropCourse(event)" ondragover="allowDrop(event)"></div>
+      </section>
 
-  <div>
-    <section class="required-bank">
-      <h2>Required Courses</h2>
-      <p class="muted">Drag these into semesters. Already-placed requirements are hidden here.</p>
-      <div id="requiredCourseBank"></div>
-    </section>
+      <section class="compact-section">
+        <h2>Semester Controls</h2>
+        <div class="semester-control-row">
+          <select id="newTermLabel"></select>
+          <input id="newTermCustom" placeholder="Optional custom label, e.g. Fifth Year Fall">
+          <button onclick="addTermBox()">Add Semester Box</button>
+        </div>
+        <p class="muted">Only cards placed in semester boxes are saved. The right-side required list hides courses already placed.</p>
+      </section>
+
+      <section class="compact-section">
+        <h2>My Schedule Builder</h2>
+        <div id="termGrid" class="term-grid"></div>
+      </section>
+
+      <section class="compact-section">
+        <h2>Response</h2>
+        <pre id="responseBox" class="response-box">No response yet.</pre>
+      </section>
+    </div>
+
+    <aside class="required-side">
+      <section class="required-bank">
+        <h2>Required Courses</h2>
+        <p class="muted">Drag these into semesters. Already-placed requirements are hidden here.</p>
+        <div id="requiredCourseBank"></div>
+      </section>
+    </aside>
   </div>
 </div>
 """
@@ -1207,7 +1316,8 @@ function refreshCardChoiceDropdowns() {
       requirement_type: card.dataset.requirementType,
       selected_course_code: card.dataset.selectedCourse,
       source_term: card.dataset.sourceTerm,
-      status: card.dataset.status
+      status: card.dataset.status,
+      completed: card.dataset.completed
     };
     const fresh = makeCourseCard(course);
     card.replaceWith(fresh);
@@ -1231,33 +1341,40 @@ function updateRequirementDropdown() {
 function requirementTypeChanged() {
   const major = document.getElementById("scheduleMajor").value;
   const type = document.getElementById("requirementType").value;
-  const list = document.getElementById("electiveOptionsList");
-  const search = document.getElementById("electiveChoiceSearch");
+  const select = document.getElementById("electiveChoiceSelect");
   const hint = document.getElementById("electiveChoiceHint");
 
-  list.innerHTML = "";
-  search.value = "";
-  search.placeholder = "Type to search approved options...";
+  select.innerHTML = "";
 
   const options = (MAJOR_DATA[major]?.dropdowns || {})[type] || [];
 
   if (!options.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "No approved list for this type";
+    select.appendChild(opt);
     hint.textContent = "No program-sheet option list for this type. Use the manual course code box.";
     return;
   }
 
-  hint.textContent = `${options.length} approved option(s) loaded for ${type}. Start typing to search, then choose one.`;
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = `Select ${type}...`;
+  select.appendChild(blank);
+
+  hint.textContent = `${options.length} approved option(s) loaded for ${type}. Select one from the dropdown.`;
 
   options.forEach(o => {
     const opt = document.createElement("option");
     opt.value = o;
-    list.appendChild(opt);
+    opt.textContent = o;
+    select.appendChild(opt);
   });
 }
 
 function electiveChoiceChanged() {
   const type = document.getElementById("requirementType").value;
-  const selected = document.getElementById("electiveChoiceSearch").value.trim();
+  const selected = document.getElementById("electiveChoiceSelect").value.trim();
   if (!selected) return;
 
   const code = parseCourseCode(selected);
@@ -1401,13 +1518,14 @@ function makeCardChoiceHtml(cardId, type, selectedValue) {
   const options = optionListForType(type);
   if (!options.length) return "";
 
-  const datalistId = `card-options-${cardId}`;
-  const optionHtml = options.map(o => `<option value="${escapeHtml(o)}"></option>`).join("");
+  const selected = selectedValue || "";
+  const selectOptions = [`<option value="">Select ${escapeHtml(type)}...</option>`].concat(
+    options.map(o => `<option value="${escapeHtml(o)}" ${o === selected ? "selected" : ""}>${escapeHtml(o)}</option>`)
+  ).join("");
   return `
     <div class="card-choice-wrap">
       <label>${escapeHtml(type)} choice</label>
-      <input class="card-choice" list="${datalistId}" value="${escapeHtml(selectedValue || "")}" placeholder="Search/select ${escapeHtml(type)}..." onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" oninput="cardChoiceChanged(event, this)">
-      <datalist id="${datalistId}">${optionHtml}</datalist>
+      <select class="card-choice" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="cardChoiceChanged(event, this)">${selectOptions}</select>
     </div>
   `;
 }
@@ -1436,7 +1554,8 @@ function cardChoiceChanged(event, input) {
 function makeCourseCard(course) {
   const card = document.createElement("div");
   card.className = "course-card";
-  if ((course.status || "").toLowerCase().includes("completed") || (course.status || "").toLowerCase().includes("transferred")) card.classList.add("completed");
+  const isCompleted = course.completed === true || course.completed === "true" || (course.status || "").toLowerCase().includes("completed") || (course.status || "").toLowerCase().includes("transferred");
+  if (isCompleted) card.classList.add("completed");
   if ((course.course_code || "").includes("Elective")) card.classList.add("placeholder");
 
   card.id = "course-" + nextCardId++;
@@ -1447,7 +1566,8 @@ function makeCourseCard(course) {
   card.dataset.requirementType = baseRequirementTypeFromCourse(course);
   card.dataset.selectedCourse = course.selected_course_code || "";
   card.dataset.sourceTerm = course.source_term || "";
-  card.dataset.status = course.status || "planned";
+  card.dataset.completed = isCompleted ? "true" : "false";
+  card.dataset.status = isCompleted ? "completed/transferred" : (course.status || "planned");
 
   const choiceValue = course.comments || "";
   const choiceHtml = makeCardChoiceHtml(card.id, card.dataset.requirementType, choiceValue);
@@ -1459,11 +1579,15 @@ function makeCourseCard(course) {
     </div>
     <div class="detail">
       <span class="comment-text">${escapeHtml(card.dataset.comments)}</span><br>
-      Status: ${escapeHtml(card.dataset.status)}
+      Status: <span class="status-text">${escapeHtml(card.dataset.status)}</span>
       ${choiceHtml}
     </div>
     <div class="course-actions">
-      <button class="small success" onclick="markCompleted(event, this)">Completed/Transferred</button>
+      <label class="completed-toggle" onclick="event.stopPropagation()">
+        <input type="checkbox" ${card.dataset.completed === "true" ? "checked" : ""} onchange="toggleCompleted(event, this)">
+        Done
+      </label>
+      <button class="small success" onclick="markCompleted(event, this)">Move to Completed</button>
       <button class="small danger" onclick="removeCard(event, this)">Remove</button>
     </div>
   `;
@@ -1472,7 +1596,7 @@ function makeCourseCard(course) {
 
 function addManualCourse() {
   const type = document.getElementById("requirementType").value;
-  const selected = document.getElementById("electiveChoiceSearch").value.trim();
+  const selected = document.getElementById("electiveChoiceSelect").value.trim();
   let code = document.getElementById("manualCourseCode").value.trim();
   const comments = document.getElementById("manualCourseComment").value.trim();
 
@@ -1492,14 +1616,30 @@ function addManualCourse() {
 
   document.getElementById("manualCourseCode").value = "";
   document.getElementById("manualCourseComment").value = "";
-  document.getElementById("electiveChoiceSearch").value = "";
+  document.getElementById("electiveChoiceSelect").value = "";
+}
+
+function setCardCompleted(card, completed) {
+  card.dataset.completed = completed ? "true" : "false";
+  card.dataset.status = completed ? "completed/transferred" : "planned";
+  card.classList.toggle("completed", completed);
+  const detail = card.querySelector(".status-text");
+  if (detail) detail.textContent = card.dataset.status;
+}
+
+function toggleCompleted(event, checkbox) {
+  event.stopPropagation();
+  const card = checkbox.closest(".course-card");
+  setCardCompleted(card, checkbox.checked);
+  loadRequiredPlan();
 }
 
 function markCompleted(event, button) {
   event.stopPropagation();
   const card = button.closest(".course-card");
-  card.dataset.status = "completed/transferred";
-  card.classList.add("completed");
+  setCardCompleted(card, true);
+  const cb = card.querySelector(".completed-toggle input");
+  if (cb) cb.checked = true;
   const completedBox = document.querySelector(`.term-box[data-term="Completed / Transferred"]`);
   completedBox.appendChild(card);
   loadRequiredPlan();
@@ -1532,6 +1672,7 @@ function dropCourse(event) {
 function buildScheduleJson() {
   const title = document.getElementById("scheduleTitle").value.trim();
   const major = document.getElementById("scheduleMajor").value;
+  const completed = document.getElementById("scheduleCompleted")?.checked || false;
   const comments = document.getElementById("scheduleComments").value.trim();
   const terms = {};
 
@@ -1546,12 +1687,13 @@ function buildScheduleJson() {
         requirement_type: card.dataset.requirementType || "",
         selected_course_code: card.dataset.selectedCourse || "",
         source_term: card.dataset.sourceTerm || "",
-        status: card.dataset.status || "planned"
+        status: card.dataset.status || "planned",
+        completed: card.dataset.completed === "true"
       });
     });
   });
 
-  return { title, major, comments, terms };
+  return { title, major, completed, comments, terms };
 }
 
 function previewSchedule() {
@@ -1574,6 +1716,7 @@ async function loadMySchedule() {
 function renderSchedule(schedule) {
   document.getElementById("scheduleTitle").value = schedule.title || "";
   document.getElementById("scheduleMajor").value = schedule.major || Object.keys(MAJOR_DATA)[0];
+  document.getElementById("scheduleCompleted").checked = !!schedule.completed;
   document.getElementById("scheduleComments").value = schedule.comments || "";
   updateRequirementDropdown();
 
@@ -1701,7 +1844,7 @@ function renderSchedules(schedules) {
 
     card.innerHTML = `
       <h3>${escapeHtml(s.title || "Untitled Schedule")}</h3>
-      <div class="muted">Student: ${escapeHtml(creator)} | Major: ${escapeHtml(s.major || "Unspecified")}</div>
+      <div class="muted">Student: ${escapeHtml(creator)} | Major: ${escapeHtml(s.major || "Unspecified")} | Completed college/plan: ${s.completed ? "Yes" : "No"}</div>
       <p>${escapeHtml(s.comments || "")}</p>
       <div class="schedule-terms">${termHtml}</div>
       <button class="secondary" onclick='showResponse(${JSON.stringify(JSON.stringify(s, null, 2))})'>Show Raw JSON</button>

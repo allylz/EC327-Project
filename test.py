@@ -19,7 +19,7 @@ BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:4000")
 # =============================================================================
 
 TERM_LABELS = [
-    "Completed / Transferred",
+    "Transferred Courses",
     "Freshman Fall",
     "Freshman Spring",
     "Freshman Summer",
@@ -734,20 +734,82 @@ BASE_HTML = r"""
     }
 
     .builder-workspace {
-      display: grid;
-      grid-template-columns: minmax(0, 2.2fr) minmax(300px, 0.9fr);
-      gap: 12px;
-      align-items: start;
+      display: block;
       width: 100%;
+      padding-right: 392px;
+      box-sizing: border-box;
     }
 
-    .schedule-side, .required-side {
-      min-width: 0;
+    .schedule-side { min-width: 0; }
+
+    .required-side {
+      position: fixed;
+      top: 82px;
+      right: 10px;
+      width: 360px;
+      max-width: calc(100vw - 24px);
+      z-index: 50;
+      transition: transform 0.25s ease;
+    }
+
+    .required-side.collapsed {
+      transform: translateX(calc(100% - 42px));
+    }
+
+    .required-toggle {
+      position: absolute;
+      left: -38px;
+      top: 12px;
+      width: 38px;
+      min-width: 38px;
+      height: 44px;
+      border-radius: 10px 0 0 10px;
+      padding: 0;
+      font-size: 11px;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      z-index: 51;
+    }
+
+    .hub-check-panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      background: #f9fafb;
+      margin-top: 8px;
+    }
+
+    .hub-check-panel h3 {
+      margin: 0 0 4px;
+      font-size: 15px;
+    }
+
+    .hub-check-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .hub-check-grid label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: white;
+      font-size: 12px;
+    }
+
+    .hub-check-grid input {
+      width: auto;
+      margin: 0;
     }
 
     .settings-grid {
       display: grid;
-      grid-template-columns: 1.3fr 1fr auto;
+      grid-template-columns: 1.3fr 1fr;
       gap: 10px;
       align-items: center;
     }
@@ -905,10 +967,10 @@ BASE_HTML = r"""
     }
 
     .required-bank {
-      position: sticky;
-      top: 12px;
-      max-height: calc(100vh - 100px);
+      max-height: calc(100vh - 108px);
       overflow: auto;
+      border: 1px solid var(--border);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
     }
 
     .required-group-title {
@@ -980,10 +1042,10 @@ BASE_HTML = r"""
       .builder-workspace, .settings-grid, .add-course-grid, .semester-control-row {
         grid-template-columns: 1fr;
       }
-      .required-bank {
-        position: static;
-        max-height: none;
-      }
+      .builder-workspace { padding-right: 0; }
+      .required-side { position: static; width: auto; max-width: none; transform: none !important; }
+      .required-toggle { display: none; }
+      .required-bank { max-height: none; }
       .button-row button { width: 100%; }
     }
 
@@ -1017,6 +1079,16 @@ BASE_HTML = r"""
 <script>
 const MAJOR_DATA = {{ major_data|safe }};
 const TERM_LABELS = {{ term_labels|safe }};
+const HUB_UNITS = [
+  "Philosophical Inquiry & Life's Meanings (PLM)",
+  "Aesthetic Exploration (AEX)",
+  "Historical Consciousness (HCO)",
+  "Social Inquiry (SO1 or SO2)",
+  "Individual & Community (IIC)",
+  "First Global Citizenship & Intercultural Literacy (GCI)",
+  "Second Global Citizenship & Intercultural Literacy (GCI)",
+  "Ethical Reasoning (ETR)"
+];
 
 function showResponse(data, boxId="responseBox") {
   const box = document.getElementById(boxId);
@@ -1186,12 +1258,13 @@ BUILD_CONTENT = r"""
       <div class="settings-grid">
         <input id="scheduleTitle" value="My Four-Year Plan" placeholder="Schedule title">
         <select id="scheduleMajor" onchange="majorChanged()"></select>
-        <label class="check-row">
-          <input id="scheduleCompleted" type="checkbox">
-          <span>I am done with college / this plan is complete</span>
-        </label>
       </div>
       <textarea id="scheduleComments" placeholder="Schedule notes">Built in the unified Flask schedule builder.</textarea>
+      <div class="hub-check-panel">
+        <h3>Unfulfilled Hub Units</h3>
+        <p class="muted">Check the Hub units this plan still needs. Saved as <code>hub_unfulfilled</code>.</p>
+        <div id="hubChecklist" class="hub-check-grid"></div>
+      </div>
       <div class="button-row">
         <button class="success" onclick="saveSchedule()">Save/Update My Schedule</button>
         <button class="secondary" onclick="loadMySchedule()">Load My Existing Schedule</button>
@@ -1236,7 +1309,7 @@ BUILD_CONTENT = r"""
 
       <section class="compact-section">
         <h2>Course Palette</h2>
-        <p class="muted">Drag cards into semesters or into Completed / Transferred.</p>
+        <p class="muted">Drag cards into semesters or into Transferred Courses.</p>
         <div id="coursePalette" class="term-box palette-box" ondrop="dropCourse(event)" ondragover="allowDrop(event)"></div>
       </section>
 
@@ -1261,7 +1334,8 @@ BUILD_CONTENT = r"""
       </section>
     </div>
 
-    <aside class="required-side">
+    <aside class="required-side" id="requiredPanel">
+      <button class="required-toggle" onclick="toggleRequiredPanel()">Hide</button>
       <section class="required-bank">
         <h2>Required Courses</h2>
         <p class="muted">Drag these into semesters. Already-placed requirements are hidden here.</p>
@@ -1275,6 +1349,29 @@ BUILD_CONTENT = r"""
 BUILD_SCRIPT = r"""
 <script>
 let nextCardId = 1;
+
+function setupHubChecklist(selectedUnits=null) {
+  const box = document.getElementById("hubChecklist");
+  if (!box) return;
+  const selected = new Set(selectedUnits || HUB_UNITS);
+  box.innerHTML = HUB_UNITS.map(unit => `
+    <label>
+      <input type="checkbox" value="${escapeHtml(unit)}" ${selected.has(unit) ? "checked" : ""}>
+      <span>${escapeHtml(unit)}</span>
+    </label>
+  `).join("");
+}
+
+function getUnfulfilledHubUnits() {
+  return [...document.querySelectorAll("#hubChecklist input:checked")].map(cb => cb.value);
+}
+
+function toggleRequiredPanel() {
+  const panel = document.getElementById("requiredPanel");
+  const btn = panel.querySelector(".required-toggle");
+  panel.classList.toggle("collapsed");
+  btn.textContent = panel.classList.contains("collapsed") ? "Show" : "Hide";
+}
 
 function setupBuilder() {
   const majorSelect = document.getElementById("scheduleMajor");
@@ -1294,8 +1391,9 @@ function setupBuilder() {
     newTerm.appendChild(opt);
   });
 
-  ensureTermBox("Completed / Transferred", true);
+  ensureTermBox("Transferred Courses", true);
   ["Freshman Fall","Freshman Spring","Sophomore Fall","Sophomore Spring","Junior Fall","Junior Spring","Senior Fall","Senior Spring"].forEach(t => ensureTermBox(t));
+  setupHubChecklist();
   majorChanged();
 }
 
@@ -1317,7 +1415,7 @@ function refreshCardChoiceDropdowns() {
       selected_course_code: card.dataset.selectedCourse,
       source_term: card.dataset.sourceTerm,
       status: card.dataset.status,
-      completed: card.dataset.completed
+      transferred: card.dataset.transferred
     };
     const fresh = makeCourseCard(course);
     card.replaceWith(fresh);
@@ -1409,8 +1507,8 @@ function removeTermBox(event, button) {
   event.stopPropagation();
   const box = button.closest(".term-box");
   const term = box.dataset.term;
-  if (term === "Completed / Transferred") {
-    alert("Completed / Transferred cannot be removed.");
+  if (term === "Transferred Courses") {
+    alert("Transferred Courses cannot be removed.");
     return;
   }
   document.getElementById("coursePalette").append(...box.querySelectorAll(".course-card"));
@@ -1433,7 +1531,7 @@ function loadRequiredPlan() {
 
   // Count cards that are already placed in the user schedule. This prevents the
   // right-side required-course bank from repeatedly showing requirements that the
-  // user has already dragged into a semester or Completed / Transferred.
+  // user has already dragged into a semester or Transferred Courses.
   const used = getPlacedRequirementCounts();
 
   bank.innerHTML = "";
@@ -1511,6 +1609,7 @@ function baseRequirementTypeFromCourse(course) {
 
 function optionListForType(type) {
   const major = document.getElementById("scheduleMajor")?.value || Object.keys(MAJOR_DATA)[0];
+  if (type === "Hub Elective") return [];
   return (MAJOR_DATA[major]?.dropdowns || {})[type] || [];
 }
 
@@ -1554,8 +1653,8 @@ function cardChoiceChanged(event, input) {
 function makeCourseCard(course) {
   const card = document.createElement("div");
   card.className = "course-card";
-  const isCompleted = course.completed === true || course.completed === "true" || (course.status || "").toLowerCase().includes("completed") || (course.status || "").toLowerCase().includes("transferred");
-  if (isCompleted) card.classList.add("completed");
+  const isTransferred = course.transferred === true || course.transferred === "true" || (course.status || "").toLowerCase().includes("transferred");
+  if (isTransferred) card.classList.add("completed");
   if ((course.course_code || "").includes("Elective")) card.classList.add("placeholder");
 
   card.id = "course-" + nextCardId++;
@@ -1566,8 +1665,8 @@ function makeCourseCard(course) {
   card.dataset.requirementType = baseRequirementTypeFromCourse(course);
   card.dataset.selectedCourse = course.selected_course_code || "";
   card.dataset.sourceTerm = course.source_term || "";
-  card.dataset.completed = isCompleted ? "true" : "false";
-  card.dataset.status = isCompleted ? "completed/transferred" : (course.status || "planned");
+  card.dataset.transferred = isTransferred ? "true" : "false";
+  card.dataset.status = isTransferred ? "transferred" : (course.status || "planned");
 
   const choiceValue = course.comments || "";
   const choiceHtml = makeCardChoiceHtml(card.id, card.dataset.requirementType, choiceValue);
@@ -1584,10 +1683,10 @@ function makeCourseCard(course) {
     </div>
     <div class="course-actions">
       <label class="completed-toggle" onclick="event.stopPropagation()">
-        <input type="checkbox" ${card.dataset.completed === "true" ? "checked" : ""} onchange="toggleCompleted(event, this)">
-        Done
+        <input type="checkbox" ${card.dataset.transferred === "true" ? "checked" : ""} onchange="toggleTransferred(event, this)">
+        Transferred
       </label>
-      <button class="small success" onclick="markCompleted(event, this)">Move to Completed</button>
+      <button class="small success" onclick="markTransferred(event, this)">Move to Transferred</button>
       <button class="small danger" onclick="removeCard(event, this)">Remove</button>
     </div>
   `;
@@ -1619,29 +1718,29 @@ function addManualCourse() {
   document.getElementById("electiveChoiceSelect").value = "";
 }
 
-function setCardCompleted(card, completed) {
-  card.dataset.completed = completed ? "true" : "false";
-  card.dataset.status = completed ? "completed/transferred" : "planned";
-  card.classList.toggle("completed", completed);
+function setCardTransferred(card, transferred) {
+  card.dataset.transferred = transferred ? "true" : "false";
+  card.dataset.status = transferred ? "transferred" : "planned";
+  card.classList.toggle("completed", transferred);
   const detail = card.querySelector(".status-text");
   if (detail) detail.textContent = card.dataset.status;
 }
 
-function toggleCompleted(event, checkbox) {
+function toggleTransferred(event, checkbox) {
   event.stopPropagation();
   const card = checkbox.closest(".course-card");
-  setCardCompleted(card, checkbox.checked);
+  setCardTransferred(card, checkbox.checked);
   loadRequiredPlan();
 }
 
-function markCompleted(event, button) {
+function markTransferred(event, button) {
   event.stopPropagation();
   const card = button.closest(".course-card");
-  setCardCompleted(card, true);
+  setCardTransferred(card, true);
   const cb = card.querySelector(".completed-toggle input");
   if (cb) cb.checked = true;
-  const completedBox = document.querySelector(`.term-box[data-term="Completed / Transferred"]`);
-  completedBox.appendChild(card);
+  const transferredBox = document.querySelector(`.term-box[data-term="Transferred Courses"]`);
+  transferredBox.appendChild(card);
   loadRequiredPlan();
 }
 
@@ -1672,7 +1771,6 @@ function dropCourse(event) {
 function buildScheduleJson() {
   const title = document.getElementById("scheduleTitle").value.trim();
   const major = document.getElementById("scheduleMajor").value;
-  const completed = document.getElementById("scheduleCompleted")?.checked || false;
   const comments = document.getElementById("scheduleComments").value.trim();
   const terms = {};
 
@@ -1688,12 +1786,12 @@ function buildScheduleJson() {
         selected_course_code: card.dataset.selectedCourse || "",
         source_term: card.dataset.sourceTerm || "",
         status: card.dataset.status || "planned",
-        completed: card.dataset.completed === "true"
+        transferred: card.dataset.transferred === "true"
       });
     });
   });
 
-  return { title, major, completed, comments, terms };
+  return { title, major, comments, hub_unfulfilled: getUnfulfilledHubUnits(), terms };
 }
 
 function previewSchedule() {
@@ -1716,16 +1814,16 @@ async function loadMySchedule() {
 function renderSchedule(schedule) {
   document.getElementById("scheduleTitle").value = schedule.title || "";
   document.getElementById("scheduleMajor").value = schedule.major || Object.keys(MAJOR_DATA)[0];
-  document.getElementById("scheduleCompleted").checked = !!schedule.completed;
   document.getElementById("scheduleComments").value = schedule.comments || "";
   updateRequirementDropdown();
+  setupHubChecklist(schedule.hub_unfulfilled || HUB_UNITS);
 
   document.getElementById("termGrid").innerHTML = "";
-  ensureTermBox("Completed / Transferred", true);
+  ensureTermBox("Transferred Courses", true);
 
   Object.entries(schedule.terms || {}).forEach(([term, courses]) => {
     if (term === "Required Courses") return;
-    ensureTermBox(term, term === "Completed / Transferred");
+    ensureTermBox(term, term === "Transferred Courses");
     const box = document.querySelector(`.term-box[data-term="${cssEscape(term)}"]`);
     courses.forEach(c => box.appendChild(makeCourseCard(c)));
   });
@@ -1844,7 +1942,7 @@ function renderSchedules(schedules) {
 
     card.innerHTML = `
       <h3>${escapeHtml(s.title || "Untitled Schedule")}</h3>
-      <div class="muted">Student: ${escapeHtml(creator)} | Major: ${escapeHtml(s.major || "Unspecified")} | Completed college/plan: ${s.completed ? "Yes" : "No"}</div>
+      <div class="muted">Student: ${escapeHtml(creator)} | Major: ${escapeHtml(s.major || "Unspecified")}</div>
       <p>${escapeHtml(s.comments || "")}</p>
       <div class="schedule-terms">${termHtml}</div>
       <button class="secondary" onclick='showResponse(${JSON.stringify(JSON.stringify(s, null, 2))})'>Show Raw JSON</button>

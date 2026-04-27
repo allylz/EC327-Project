@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>BU Schedule Browser</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -37,7 +38,6 @@
     line-height: 1.6;
   }
 
-  /* ── Header ── */
   header {
     background: var(--red);
     padding: 18px 32px;
@@ -47,7 +47,6 @@
   }
 
   .bu-wordmark {
-    font-family: 'DM Sans', sans-serif;
     font-weight: 600;
     font-size: 20px;
     color: #fff;
@@ -74,7 +73,6 @@
     font-weight: 400;
   }
 
-  /* ── Layout ── */
   .page {
     max-width: 1020px;
     margin: 0 auto;
@@ -94,7 +92,6 @@
     margin-bottom: 28px;
   }
 
-  /* ── Filter bar ── */
   .filters {
     display: flex;
     flex-wrap: wrap;
@@ -127,7 +124,6 @@
 
   .filters input::placeholder { color: var(--text-3); }
 
-  /* ── Status bar ── */
   .status-bar {
     font-size: 13px;
     color: var(--text-3);
@@ -135,7 +131,6 @@
     font-family: 'DM Mono', monospace;
   }
 
-  /* ── Cards ── */
   .cards { display: flex; flex-direction: column; gap: 10px; }
 
   .card {
@@ -234,7 +229,6 @@
 
   .chevron.open { transform: rotate(180deg); }
 
-  /* ── Card body ── */
   .card-body {
     border-top: 1px solid var(--border);
     padding: 16px 18px;
@@ -300,7 +294,6 @@
     padding: 2px 9px;
   }
 
-  /* ── Empty / loading ── */
   .state-msg {
     text-align: center;
     padding: 52px 24px;
@@ -325,9 +318,11 @@
     font-size: 13px;
     margin-bottom: 20px;
     display: none;
+    white-space: pre-wrap;
   }
 </style>
 </head>
+
 <body>
 
 <header>
@@ -344,12 +339,15 @@
 
   <div class="filters">
     <input type="text" id="searchInput" placeholder="Search by name, title, or course code…" oninput="filterSchedules()" />
+
     <select id="majorFilter" onchange="filterSchedules()">
       <option value="">All majors</option>
     </select>
+
     <select id="termFilter" onchange="filterSchedules()">
       <option value="">All terms</option>
     </select>
+
     <select id="sortBy" onchange="filterSchedules()">
       <option value="newest">Newest first</option>
       <option value="oldest">Oldest first</option>
@@ -373,148 +371,276 @@
 </div>
 
 <script>
-const BASE = 'http://localhost:4000';
+const BASE = "http://localhost:4000";
+
 let allSchedules = [];
 let expanded = new Set();
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function initials(name) {
-  if (!name) return '?';
-  return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  if (!name) return "?";
+
+  return name
+    .trim()
+    .split(/\s+/)
+    .map(word => word[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 }
 
-function termOrder(t) {
-  const s = { Spring: 0, Summer: 1, Fall: 2 };
-  const parts = t.split(' ');
-  return parseInt(parts[1] || 0) * 10 + (s[parts[0]] ?? 5);
+function termOrder(termName) {
+  const seasonOrder = {
+    Spring: 0,
+    Summer: 1,
+    Fall: 2
+  };
+
+  const parts = String(termName || "").split(" ");
+  const season = parts[0];
+  const year = parseInt(parts[1] || "0", 10);
+
+  return year * 10 + (seasonOrder[season] ?? 5);
 }
 
-function allCoursesInSchedule(s) {
-  return Object.values(s.terms || {}).flat();
+function allCoursesInSchedule(schedule) {
+  return Object.values(schedule.terms || {}).flat();
 }
 
-function renderCard(s) {
-  const isOpen = expanded.has(s.id);
-  const courses = allCoursesInSchedule(s);
-  const terms = s.terms || {};
+function renderCard(schedule) {
+  const isOpen = expanded.has(schedule.id);
+  const courses = allCoursesInSchedule(schedule);
+  const terms = schedule.terms || {};
   const sortedTerms = Object.keys(terms).sort((a, b) => termOrder(a) - termOrder(b));
-  const hubs = [...new Set(courses.flatMap(c => c.hub_areas || []))];
+  const hubs = [...new Set(courses.flatMap(course => course.hub_areas || []))];
 
-  const bodyHtml = isOpen ? `
-    <div class="card-body">
-      ${s.comments ? `<div class="card-comments">"${s.comments}"</div>` : ''}
-      <div class="terms-grid">
-        ${sortedTerms.length ? sortedTerms.map(t => `
+  const commentsHtml = schedule.comments
+    ? `<div class="card-comments">"${escapeHtml(schedule.comments)}"</div>`
+    : "";
+
+  const termsHtml = sortedTerms.length
+    ? sortedTerms.map(termName => {
+        const termCourses = terms[termName] || [];
+
+        const coursePills = termCourses.length
+          ? termCourses.map(course => {
+              const code = escapeHtml(course.course_code || "");
+              const title = escapeHtml(course.course_title || "");
+              return `<span class="course-pill" title="${title}">${code}</span>`;
+            }).join("")
+          : `<span style="font-size:11px;color:var(--text-3);">No courses</span>`;
+
+        return `
           <div class="term-block">
-            <div class="term-label">${t}</div>
-            ${(terms[t] || []).length
-              ? terms[t].map(c => `<span class="course-pill" title="${c.course_title || ''}">${c.course_code}</span>`).join('')
-              : '<span style="font-size:11px;color:var(--text-3);">No courses</span>'}
-          </div>`).join('')
-        : '<span style="font-size:12px;color:var(--text-3);">No terms added yet</span>'}
+            <div class="term-label">${escapeHtml(termName)}</div>
+            ${coursePills}
+          </div>
+        `;
+      }).join("")
+    : `<span style="font-size:12px;color:var(--text-3);">No terms added yet</span>`;
+
+  const hubsHtml = hubs.length
+    ? `<div class="hub-area-row">${hubs.map(hub => `<span class="hub-tag">${escapeHtml(hub)}</span>`).join("")}</div>`
+    : "";
+
+  const bodyHtml = isOpen
+    ? `
+      <div class="card-body">
+        ${commentsHtml}
+        <div class="terms-grid">
+          ${termsHtml}
+        </div>
+        ${hubsHtml}
       </div>
-      ${hubs.length ? `<div class="hub-area-row">${hubs.map(h => `<span class="hub-tag">${h}</span>`).join('')}</div>` : ''}
-    </div>` : '';
+    `
+    : "";
 
   return `
-    <div class="card${isOpen ? ' expanded' : ''}" id="card-${s.id}">
-      <div class="card-header" onclick="toggleCard('${s.id}')">
-        <div class="avatar">${initials(s.creator?.displayName)}</div>
+    <div class="card${isOpen ? " expanded" : ""}" id="card-${escapeHtml(schedule.id)}">
+      <div class="card-header" onclick="toggleCard('${escapeHtml(schedule.id)}')">
+        <div class="avatar">${escapeHtml(initials(schedule.creator?.displayName))}</div>
+
         <div class="card-info">
-          <div class="card-title">${s.title}</div>
-          <div class="card-meta">${s.creator?.displayName || 'Unknown'} · ${s.creator?.email || ''}</div>
+          <div class="card-title">${escapeHtml(schedule.title || "Untitled schedule")}</div>
+          <div class="card-meta">
+            ${escapeHtml(schedule.creator?.displayName || "Unknown")}
+            ${schedule.creator?.email ? ` · ${escapeHtml(schedule.creator.email)}` : ""}
+          </div>
         </div>
+
         <div class="card-right">
-          ${s.major ? `<span class="badge badge-major">${s.major}</span>` : ''}
-          <span class="badge badge-count">${courses.length} course${courses.length !== 1 ? 's' : ''}</span>
-          <div class="chevron${isOpen ? ' open' : ''}">▼</div>
+          ${schedule.major ? `<span class="badge badge-major">${escapeHtml(schedule.major)}</span>` : ""}
+          <span class="badge badge-count">${courses.length} course${courses.length !== 1 ? "s" : ""}</span>
+          <div class="chevron${isOpen ? " open" : ""}">▼</div>
         </div>
       </div>
+
       ${bodyHtml}
-    </div>`;
+    </div>
+  `;
 }
 
 function toggleCard(id) {
-  expanded.has(id) ? expanded.delete(id) : expanded.add(id);
+  if (expanded.has(id)) {
+    expanded.delete(id);
+  } else {
+    expanded.add(id);
+  }
+
   renderVisible();
 }
 
 function getFiltered() {
-  const q = document.getElementById('searchInput').value.trim().toLowerCase();
-  const major = document.getElementById('majorFilter').value;
-  const term = document.getElementById('termFilter').value;
-  const sort = document.getElementById('sortBy').value;
+  const q = document.getElementById("searchInput").value.trim().toLowerCase();
+  const major = document.getElementById("majorFilter").value;
+  const term = document.getElementById("termFilter").value;
+  const sort = document.getElementById("sortBy").value;
 
-  let res = allSchedules.filter(s => {
-    if (major && s.major !== major) return false;
-    if (term && !Object.keys(s.terms || {}).includes(term)) return false;
+  let results = allSchedules.filter(schedule => {
+    if (major && schedule.major !== major) return false;
+
+    if (term && !Object.keys(schedule.terms || {}).includes(term)) return false;
+
     if (q) {
-      const courses = allCoursesInSchedule(s);
-      const matchCourse = courses.some(c =>
-        (c.course_code || '').toLowerCase().includes(q) ||
-        (c.course_title || '').toLowerCase().includes(q)
+      const courses = allCoursesInSchedule(schedule);
+
+      const matchCourse = courses.some(course =>
+        String(course.course_code || "").toLowerCase().includes(q) ||
+        String(course.course_title || "").toLowerCase().includes(q)
       );
-      const matchMeta = (s.title || '').toLowerCase().includes(q) ||
-                        (s.creator?.displayName || '').toLowerCase().includes(q);
+
+      const matchMeta =
+        String(schedule.title || "").toLowerCase().includes(q) ||
+        String(schedule.creator?.displayName || "").toLowerCase().includes(q) ||
+        String(schedule.creator?.email || "").toLowerCase().includes(q) ||
+        String(schedule.major || "").toLowerCase().includes(q);
+
       if (!matchCourse && !matchMeta) return false;
     }
+
     return true;
   });
 
-  res.sort((a, b) => {
-    if (sort === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
-    if (sort === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
-    return (a.title || '').localeCompare(b.title || '');
+  results.sort((a, b) => {
+    if (sort === "newest") {
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    }
+
+    if (sort === "oldest") {
+      return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+    }
+
+    return String(a.title || "").localeCompare(String(b.title || ""));
   });
 
-  return res;
+  return results;
 }
 
 function renderVisible() {
   const results = getFiltered();
-  const cardsEl = document.getElementById('cards');
-  const emptyEl = document.getElementById('emptyState');
-  const statusEl = document.getElementById('statusBar');
 
-  emptyEl.style.display = results.length === 0 ? 'block' : 'none';
-  cardsEl.innerHTML = results.map(renderCard).join('');
-  statusEl.textContent = `${results.length} schedule${results.length !== 1 ? 's' : ''} shown` +
-    (allSchedules.length !== results.length ? ` of ${allSchedules.length}` : '');
+  const cardsEl = document.getElementById("cards");
+  const emptyEl = document.getElementById("emptyState");
+  const statusEl = document.getElementById("statusBar");
+
+  emptyEl.style.display = results.length === 0 ? "block" : "none";
+  cardsEl.innerHTML = results.map(renderCard).join("");
+
+  statusEl.textContent =
+    `${results.length} schedule${results.length !== 1 ? "s" : ""} shown` +
+    (allSchedules.length !== results.length ? ` of ${allSchedules.length}` : "");
 }
 
-function filterSchedules() { renderVisible(); }
+function filterSchedules() {
+  renderVisible();
+}
 
 function populateFilters() {
-  const majors = [...new Set(allSchedules.map(s => s.major).filter(Boolean))].sort();
-  document.getElementById('majorFilter').innerHTML =
-    '<option value="">All majors</option>' +
-    majors.map(m => `<option value="${m}">${m}</option>`).join('');
+  const majors = [...new Set(allSchedules.map(schedule => schedule.major).filter(Boolean))].sort();
+
+  document.getElementById("majorFilter").innerHTML =
+    `<option value="">All majors</option>` +
+    majors.map(major => `<option value="${escapeHtml(major)}">${escapeHtml(major)}</option>`).join("");
 
   const terms = new Set();
-  allSchedules.forEach(s => Object.keys(s.terms || {}).forEach(t => terms.add(t)));
+
+  allSchedules.forEach(schedule => {
+    Object.keys(schedule.terms || {}).forEach(term => terms.add(term));
+  });
+
   const sortedTerms = [...terms].sort((a, b) => termOrder(a) - termOrder(b));
-  document.getElementById('termFilter').innerHTML =
-    '<option value="">All terms</option>' +
-    sortedTerms.map(t => `<option value="${t}">${t}</option>`).join('');
+
+  document.getElementById("termFilter").innerHTML =
+    `<option value="">All terms</option>` +
+    sortedTerms.map(term => `<option value="${escapeHtml(term)}">${escapeHtml(term)}</option>`).join("");
 }
 
 async function loadSchedules() {
+  const loadingEl = document.getElementById("loadingState");
+  const errorEl = document.getElementById("errorNote");
+  const statusEl = document.getElementById("statusBar");
+
   try {
-    const res = await fetch(`${BASE}/api/schedules`, { credentials: 'include' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    allSchedules = await res.json();
-    document.getElementById('loadingState').style.display = 'none';
+    errorEl.style.display = "none";
+    errorEl.textContent = "";
+
+    const url = `${BASE}/api/schedules`;
+    console.log("Fetching schedules from:", url);
+
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include"
+    });
+
+    const rawText = await response.text();
+
+    console.log("Schedule response status:", response.status);
+    console.log("Schedule raw response:", rawText);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${rawText || response.statusText}`);
+    }
+
+    const data = rawText ? JSON.parse(rawText) : [];
+
+    if (!Array.isArray(data)) {
+      throw new Error("Backend did not return an array for /api/schedules.");
+    }
+
+    allSchedules = data;
+
+    loadingEl.style.display = "none";
+
     populateFilters();
     renderVisible();
-  } catch (e) {
-    document.getElementById('loadingState').style.display = 'none';
-    const errEl = document.getElementById('errorNote');
-    errEl.style.display = 'block';
-    errEl.textContent = `Could not load schedules: ${e.message}. Make sure the backend is running.`;
-    document.getElementById('statusBar').textContent = '';
+
+  } catch (error) {
+    console.error("Could not load schedules:", error);
+
+    loadingEl.style.display = "none";
+    statusEl.textContent = "";
+
+    errorEl.style.display = "block";
+    errorEl.textContent =
+      `Could not load schedules: ${error.message}\n\n` +
+      `Check these:\n` +
+      `1. Backend is running on ${BASE}\n` +
+      `2. GET ${BASE}/health works\n` +
+      `3. GET ${BASE}/api/schedules works\n` +
+      `4. Backend CORS allows this frontend origin`;
   }
 }
 
 loadSchedules();
 </script>
+
 </body>
 </html>

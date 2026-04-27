@@ -129,6 +129,44 @@ async function sendVerificationEmail(email, code) {
 
   return data;
 }
+async function sendPasswordResetEmail(email, code) {
+  console.log("---- PASSWORD RESET EMAIL DEBUG START ----");
+
+  if (process.env.SKIP_EMAIL === "true") {
+    console.log("SKIP_EMAIL=true, not sending real password reset email.");
+    console.log(`Password reset code for ${email}: ${code}`);
+    console.log("---- PASSWORD RESET EMAIL DEBUG END ----");
+    return;
+  }
+
+  if (process.env.EMAIL_PROVIDER !== "gmail_api") {
+    throw new Error("EMAIL_PROVIDER must be gmail_api, or set SKIP_EMAIL=true.");
+  }
+
+  console.log("Sending password reset email through Gmail API...");
+  console.log("To:", email);
+  console.log("From:", process.env.GMAIL_FROM);
+
+  const data = await sendWithGmailApi({
+    to: email,
+    subject: "Your BU Course Scheduler password reset code",
+    text: `Your password reset code is: ${code}. This code expires in 10 minutes.`,
+    html: `
+      <h2>BU Course Scheduler</h2>
+      <p>Your password reset code is:</p>
+      <h1>${code}</h1>
+      <p>This code expires in 10 minutes.</p>
+      <p>If you did not request this, you can ignore this email.</p>
+    `,
+  });
+
+  console.log("Password reset email sent through Gmail API.");
+  console.log("Gmail response:", data);
+  console.log("---- PASSWORD RESET EMAIL DEBUG END ----");
+
+  return data;
+}
+
 
 function validateScheduleTerms(terms) {
   if (!terms || typeof terms !== "object" || Array.isArray(terms)) {

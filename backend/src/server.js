@@ -242,6 +242,166 @@ app.get("/health", (_req, res) => {
 // Auth
 // -------------------------
 
+app.post("/api/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: "Email is required.",
+      });
+    }
+
+    const normalizedEmail = String(email).toLowerCase().trim();
+
+    if (!normalizedEmail.endsWith("@bu.edu")) {
+      return res.status(400).json({
+        error: "Only bu.edu emails are allowed.",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    // Security note:
+    // Usually you do not reveal whether an email exists.
+    // For a class project, this is okay either way.
+    if (!user) {
+      return res.status(404).json({
+        error: "No user found with that email.",
+      });
+    }
+
+    // Mark old reset codes as used
+    await prisma.passwordResetCode.updateMany({
+      where: {
+        email: normalizedEmail,
+        used: false,
+      },
+      data: {
+        used: true,
+      },
+    });
+
+    const code = generateCode();
+
+    await prisma.passwordResetCode.create({
+      data: {
+        email: normalizedEmail,
+        code,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
+
+    await sendPasswordResetEmail(normalizedEmail, code);
+
+    res.json({
+      message: "Password reset code sent.",
+      devCode: process.env.NODE_ENV === "development" ? code : undefined,
+    });
+  } catch (err) {
+    console.error("Forgot password error:", err);
+
+    res.status(500).json({
+      error: "Could not send password reset code.",
+      detail: err.message,
+    });
+  }
+});
+
+app.post("/api/auth/reset-password", async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({
+        error: "Email, code, and newPassword are required.",
+      });
+    }
+
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({
+        error: "New password must be at least 8 characters long.",
+      });
+    }
+
+    const normalizedEmail = String(email).toLowerCase().trim();
+
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: "No user found with that email.",
+      });
+    }
+
+    const record = await prisma.passwordResetCode.findFirst({
+      where: {
+        email: normalizedEmail,
+        code: String(code).trim(),
+        used: false,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    if (!record) {
+      return res.status(400).json({
+        error: "Invalid or expired password reset code.",
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: {
+        email: normalizedEmail,
+      },
+      data: {
+        passwordHash,
+      },
+    });
+
+    await prisma.passwordResetCode.update({
+      where: {
+        id: record.id,
+      },
+      data: {
+        used: true,
+      },
+    });
+
+    // Optional: invalidate all other unused reset codes for this email
+    await prisma.passwordResetCode.updateMany({
+      where: {
+        email: normalizedEmail,
+        used: false,
+      },
+      data: {
+        used: true,
+      },
+    });
+
+    res.json({
+      message: "Password reset successful. You can now log in with your new password.",
+    });
+  } catch (err) {
+    console.error("Reset password error:", err);
+
+    res.status(500).json({
+      error: "Could not reset password.",
+      detail: err.message,
+    });
+  }
+});
+
 app.get("/api/gmail/auth", (req, res) => {
   try {
     const oauth2Client = getGmailOAuthClient();

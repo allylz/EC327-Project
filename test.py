@@ -20,7 +20,6 @@ BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:4000")
 
 TERM_LABELS = [
     "Completed / Transferred",
-    "Required Courses",
     "Freshman Fall",
     "Freshman Spring",
     "Freshman Summer",
@@ -675,6 +674,13 @@ BASE_HTML = r"""
       gap: 12px;
     }
 
+    .builder-layout {
+      display: grid;
+      grid-template-columns: 340px minmax(420px, 1fr) 340px;
+      gap: 18px;
+      align-items: start;
+    }
+
     .muted { color: var(--muted); font-size: 13px; }
     .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #e5e7eb; font-size: 12px; margin: 3px; }
 
@@ -691,7 +697,7 @@ BASE_HTML = r"""
 
     .term-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(250px, 1fr));
+      grid-template-columns: 1fr;
       gap: 12px;
       margin-top: 12px;
     }
@@ -725,6 +731,31 @@ BASE_HTML = r"""
       padding: 9px;
       margin: 8px 0;
       cursor: grab;
+      display: grid;
+      grid-template-columns: minmax(140px, 220px) 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .course-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .required-bank {
+      position: sticky;
+      top: 12px;
+      max-height: calc(100vh - 140px);
+      overflow: auto;
+    }
+
+    .required-group-title {
+      margin: 12px 0 4px;
+      font-weight: bold;
+      font-size: 13px;
+      color: #374151;
     }
 
     .course-card.completed {
@@ -786,7 +817,11 @@ BASE_HTML = r"""
     }
 
     @media (max-width: 900px) {
-      .grid-2, .grid-3, .term-grid, .schedule-terms {
+      .grid-2, .grid-3, .builder-layout, .term-grid, .schedule-terms {
+        grid-template-columns: 1fr;
+      }
+
+      .course-card {
         grid-template-columns: 1fr;
       }
     }
@@ -973,7 +1008,7 @@ window.addEventListener("load", loadEmailFields);
 """
 
 BUILD_CONTENT = r"""
-<div class="grid-2">
+<div class="builder-layout">
   <div>
     <section>
       <h2>Schedule Settings</h2>
@@ -982,7 +1017,7 @@ BUILD_CONTENT = r"""
       <textarea id="scheduleComments" placeholder="Schedule notes">Built in the unified Flask schedule builder.</textarea>
       <button class="success" onclick="saveSchedule()">Save/Update My Schedule</button>
       <button class="secondary" onclick="loadMySchedule()">Load My Existing Schedule</button>
-      <button class="secondary" onclick="loadRequiredPlan()">Load Required Plan for Major</button>
+      <button class="secondary" onclick="loadRequiredPlan()">Reload Required Courses</button>
       <button class="secondary" onclick="previewSchedule()">Preview JSON</button>
     </section>
 
@@ -992,7 +1027,9 @@ BUILD_CONTENT = r"""
       <select id="requirementType" onchange="requirementTypeChanged()"></select>
 
       <label>Approved elective/core choice</label>
-      <select id="electiveChoice" onchange="electiveChoiceChanged()"></select>
+      <input id="electiveChoiceSearch" list="electiveOptionsList" placeholder="Type to search approved options..." oninput="electiveChoiceChanged()">
+      <datalist id="electiveOptionsList"></datalist>
+      <div class="muted" id="electiveChoiceHint">Pick a requirement type first. The options come from the selected major's program planning sheet.</div>
 
       <label>Manual course code or placeholder</label>
       <input id="manualCourseCode" placeholder="Example: ENG EC 327 or Technical Elective">
@@ -1008,7 +1045,7 @@ BUILD_CONTENT = r"""
 
     <section>
       <h2>Course Palette</h2>
-      <p class="muted">Drag cards into semesters, or use the semester dropdown on a card.</p>
+      <p class="muted">Drag cards into semesters or into Completed / Transferred.</p>
       <div id="coursePalette" class="term-box" ondrop="dropCourse(event)" ondragover="allowDrop(event)"></div>
     </section>
   </div>
@@ -1021,7 +1058,7 @@ BUILD_CONTENT = r"""
         <input id="newTermCustom" placeholder="Optional custom label, e.g. Fifth Year Fall">
         <button onclick="addTermBox()">Add Semester Box</button>
       </div>
-      <p class="muted">Each schedule always includes Completed / Transferred and Required Courses. Add as many planning semesters as needed.</p>
+      <p class="muted">Completed / Transferred is saved. Required-course cards on the right are only a draggable planning checklist and are not saved as a separate JSON bucket.</p>
     </section>
 
     <section>
@@ -1032,6 +1069,14 @@ BUILD_CONTENT = r"""
     <section>
       <h2>Response</h2>
       <pre id="responseBox" class="response-box">No response yet.</pre>
+    </section>
+  </div>
+
+  <div>
+    <section class="required-bank">
+      <h2>Required Courses</h2>
+      <p class="muted">Loaded from the selected major's program planning sheet. Drag these into the semester boxes. These cards are not saved unless you place them into your schedule.</p>
+      <div id="requiredCourseBank"></div>
     </section>
   </div>
 </div>
@@ -1060,13 +1105,13 @@ function setupBuilder() {
   });
 
   ensureTermBox("Completed / Transferred", true);
-  ensureTermBox("Required Courses", true);
   ["Freshman Fall","Freshman Spring","Sophomore Fall","Sophomore Spring","Junior Fall","Junior Spring","Senior Fall","Senior Spring"].forEach(t => ensureTermBox(t));
   majorChanged();
 }
 
 function majorChanged() {
   updateRequirementDropdown();
+  loadRequiredPlan();
 }
 
 function updateRequirementDropdown() {
@@ -1086,36 +1131,49 @@ function updateRequirementDropdown() {
 function requirementTypeChanged() {
   const major = document.getElementById("scheduleMajor").value;
   const type = document.getElementById("requirementType").value;
-  const choice = document.getElementById("electiveChoice");
-  choice.innerHTML = "";
+  const list = document.getElementById("electiveOptionsList");
+  const search = document.getElementById("electiveChoiceSearch");
+  const hint = document.getElementById("electiveChoiceHint");
+
+  list.innerHTML = "";
+  search.value = "";
+  search.placeholder = "Type to search approved options...";
 
   const options = (MAJOR_DATA[major]?.dropdowns || {})[type] || [];
-  const blank = document.createElement("option");
-  blank.value = "";
-  blank.textContent = options.length ? "Select approved option..." : "No dropdown options for this type";
-  choice.appendChild(blank);
+
+  if (!options.length) {
+    hint.textContent = "No program-sheet option list for this type. Use the manual course code box.";
+    return;
+  }
+
+  hint.textContent = `${options.length} approved option(s) loaded for ${type}. Start typing to search, then choose one.`;
 
   options.forEach(o => {
     const opt = document.createElement("option");
     opt.value = o;
-    opt.textContent = o;
-    choice.appendChild(opt);
+    list.appendChild(opt);
   });
 }
 
 function electiveChoiceChanged() {
   const type = document.getElementById("requirementType").value;
-  const selected = document.getElementById("electiveChoice").value;
+  const selected = document.getElementById("electiveChoiceSearch").value.trim();
   if (!selected) return;
 
-  const code = selected.split(" - ")[0].trim();
-  if (type.includes("Elective") || type.includes("Core") || type.includes("Breadth") || type.includes("Fields")) {
+  const code = parseCourseCode(selected);
+  if (type.includes("Elective") || type.includes("Core") || type.includes("Breadth") || type.includes("Fields") || type.includes("Professional")) {
     document.getElementById("manualCourseCode").value = `${type} (${code})`;
     document.getElementById("manualCourseComment").value = selected;
   } else {
     document.getElementById("manualCourseCode").value = code;
     document.getElementById("manualCourseComment").value = selected;
   }
+}
+
+function parseCourseCode(selected) {
+  const firstPart = String(selected).split(" - ")[0].trim();
+  const match = firstPart.match(/[A-Z]{2,4}\s+[A-Z]{0,3}\s*\d{3}[A-Z]?/);
+  return match ? match[0].replace(/\s+/g, " ").trim() : firstPart;
 }
 
 function ensureTermBox(termName, special=false) {
@@ -1134,8 +1192,8 @@ function removeTermBox(event, button) {
   event.stopPropagation();
   const box = button.closest(".term-box");
   const term = box.dataset.term;
-  if (term === "Completed / Transferred" || term === "Required Courses") {
-    alert("This required bucket cannot be removed.");
+  if (term === "Completed / Transferred") {
+    alert("Completed / Transferred cannot be removed.");
     return;
   }
   document.getElementById("coursePalette").append(...box.querySelectorAll(".course-card"));
@@ -1152,21 +1210,24 @@ function addTermBox() {
 function loadRequiredPlan() {
   const major = document.getElementById("scheduleMajor").value;
   const plan = MAJOR_DATA[major]?.required_plan || {};
+  const bank = document.getElementById("requiredCourseBank");
+  if (!bank) return;
 
+  bank.innerHTML = "";
   Object.entries(plan).forEach(([term, courses]) => {
     ensureTermBox(term);
-    const box = document.querySelector(`.term-box[data-term="${cssEscape(term)}"]`);
+    const group = document.createElement("div");
+    group.className = "required-group";
+    group.innerHTML = `<div class="required-group-title">${escapeHtml(term)}</div>`;
     courses.forEach(([code, comment]) => {
-      box.appendChild(makeCourseCard({course_code: code, comments: comment, requirement_type: inferType(code)}));
+      group.appendChild(makeCourseCard({
+        course_code: code,
+        comments: comment,
+        requirement_type: inferType(code),
+        source_term: term
+      }));
     });
-  });
-
-  const reqBox = document.querySelector(`.term-box[data-term="Required Courses"]`);
-  reqBox.querySelectorAll(".course-card").forEach(c => c.remove());
-  Object.entries(plan).forEach(([term, courses]) => {
-    courses.forEach(([code, comment]) => {
-      reqBox.appendChild(makeCourseCard({course_code: code, comments: `${term}: ${comment}`, requirement_type: inferType(code)}));
-    });
+    bank.appendChild(group);
   });
 }
 
@@ -1191,48 +1252,29 @@ function makeCourseCard(course) {
   card.dataset.status = course.status || "planned";
 
   card.innerHTML = `
-    <div class="code">${escapeHtml(card.dataset.code)}</div>
-    <div class="detail">${escapeHtml(card.dataset.comments)}</div>
-    <div class="detail">Type: ${escapeHtml(card.dataset.requirementType || "Course")} | Status: ${escapeHtml(card.dataset.status)}</div>
-    <select onchange="moveCardToTerm(this)">
-      <option value="">Move to...</option>
-      ${[...document.querySelectorAll("#termGrid .term-box")].map(b => `<option value="${escapeHtml(b.dataset.term)}">${escapeHtml(b.dataset.term)}</option>`).join("")}
-    </select>
-    <button class="small success" onclick="markCompleted(event, this)">Completed/Transferred</button>
-    <button class="small danger" onclick="removeCard(event, this)">Remove</button>
+    <div><div class="code">${escapeHtml(card.dataset.code)}</div><div class="detail">${escapeHtml(card.dataset.requirementType || "Course")}</div></div>
+    <div class="detail">${escapeHtml(card.dataset.comments)}<br>Status: ${escapeHtml(card.dataset.status)}</div>
+    <div class="course-actions">
+      <button class="small success" onclick="markCompleted(event, this)">Completed/Transferred</button>
+      <button class="small danger" onclick="removeCard(event, this)">Remove</button>
+    </div>
   `;
   return card;
 }
 
-function refreshMoveDropdowns() {
-  document.querySelectorAll(".course-card select").forEach(sel => {
-    const current = sel.value;
-    sel.innerHTML = `<option value="">Move to...</option>` + [...document.querySelectorAll("#termGrid .term-box")].map(b => `<option value="${escapeHtml(b.dataset.term)}">${escapeHtml(b.dataset.term)}</option>`).join("");
-    sel.value = current;
-  });
-}
-
-function moveCardToTerm(sel) {
-  const term = sel.value;
-  if (!term) return;
-  const box = document.querySelector(`.term-box[data-term="${cssEscape(term)}"]`);
-  if (box) box.appendChild(sel.closest(".course-card"));
-  sel.value = "";
-}
-
 function addManualCourse() {
   const type = document.getElementById("requirementType").value;
-  const selected = document.getElementById("electiveChoice").value;
+  const selected = document.getElementById("electiveChoiceSearch").value.trim();
   let code = document.getElementById("manualCourseCode").value.trim();
   const comments = document.getElementById("manualCourseComment").value.trim();
 
   if (!code && selected) {
-    const selectedCode = selected.split(" - ")[0].trim();
+    const selectedCode = parseCourseCode(selected);
     code = `${type} (${selectedCode})`;
   }
   if (!code) { alert("Enter a course code or select an elective option."); return; }
 
-  const selectedCode = selected ? selected.split(" - ")[0].trim() : "";
+  const selectedCode = selected ? parseCourseCode(selected) : "";
   document.getElementById("coursePalette").appendChild(makeCourseCard({
     course_code: code,
     comments,
@@ -1242,6 +1284,7 @@ function addManualCourse() {
 
   document.getElementById("manualCourseCode").value = "";
   document.getElementById("manualCourseComment").value = "";
+  document.getElementById("electiveChoiceSearch").value = "";
 }
 
 function markCompleted(event, button) {
@@ -1281,6 +1324,7 @@ function buildScheduleJson() {
 
   document.querySelectorAll("#termGrid .term-box").forEach(box => {
     const term = box.dataset.term;
+    if (term === "Required Courses") return;
     terms[term] = [];
     box.querySelectorAll(".course-card").forEach(card => {
       terms[term].push({
@@ -1321,10 +1365,11 @@ function renderSchedule(schedule) {
 
   document.getElementById("termGrid").innerHTML = "";
   ensureTermBox("Completed / Transferred", true);
-  ensureTermBox("Required Courses", true);
+  loadRequiredPlan();
 
   Object.entries(schedule.terms || {}).forEach(([term, courses]) => {
-    ensureTermBox(term, term === "Completed / Transferred" || term === "Required Courses");
+    if (term === "Required Courses") return;
+    ensureTermBox(term, term === "Completed / Transferred");
     const box = document.querySelector(`.term-box[data-term="${cssEscape(term)}"]`);
     courses.forEach(c => box.appendChild(makeCourseCard(c)));
   });

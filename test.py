@@ -667,9 +667,11 @@ BASE_HTML = r"""
     }
 
     main {
-      padding: 12px;
-      max-width: 1280px;
-      margin: 0 auto;
+      padding: 10px;
+      max-width: none;
+      width: 100%;
+      margin: 0;
+      box-sizing: border-box;
     }
 
     section, .panel {
@@ -716,15 +718,16 @@ BASE_HTML = r"""
 
     .grid-3 {
       display: grid;
-      grid-template-columns: repeat(3, minmax(220px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 10px;
     }
 
     .builder-layout {
       display: grid;
-      grid-template-columns: 280px minmax(460px, 1fr) 300px;
-      gap: 12px;
+      grid-template-columns: minmax(260px, 340px) minmax(560px, 1fr) minmax(260px, 340px);
+      gap: 10px;
       align-items: start;
+      width: 100%;
     }
 
     .muted { color: var(--muted); font-size: 13px; }
@@ -743,9 +746,10 @@ BASE_HTML = r"""
 
     .term-grid {
       display: grid;
-      grid-template-columns: 1fr;
-      gap: 8px;
+      grid-template-columns: repeat(2, minmax(360px, 1fr));
+      gap: 10px;
       margin-top: 8px;
+      align-items: start;
     }
 
     .term-box {
@@ -754,6 +758,7 @@ BASE_HTML = r"""
       border-radius: 12px;
       padding: 8px;
       background: #f9fafb;
+      box-sizing: border-box;
     }
 
     .term-box.special {
@@ -778,9 +783,29 @@ BASE_HTML = r"""
       margin: 5px 0;
       cursor: grab;
       display: grid;
-      grid-template-columns: minmax(155px, 230px) 1fr auto;
+      grid-template-columns: minmax(155px, 220px) minmax(200px, 1fr) auto;
       gap: 8px;
       align-items: center;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .card-choice-wrap {
+      margin-top: 5px;
+    }
+
+    .card-choice-wrap label {
+      display: block;
+      font-size: 11px;
+      color: #4b5563;
+      margin-bottom: 2px;
+    }
+
+    .card-choice {
+      margin: 0;
+      padding: 5px 7px;
+      font-size: 12px;
+      background: white;
     }
 
     .course-actions {
@@ -862,8 +887,18 @@ BASE_HTML = r"""
       font-size: 13px;
     }
 
+    @media (max-width: 1150px) {
+      .builder-layout {
+        grid-template-columns: 1fr;
+      }
+      .required-bank {
+        position: static;
+        max-height: none;
+      }
+    }
+
     @media (max-width: 900px) {
-      .grid-2, .grid-3, .builder-layout, .term-grid, .schedule-terms {
+      .grid-2, .grid-3, .term-grid, .schedule-terms {
         grid-template-columns: 1fr;
       }
 
@@ -1157,7 +1192,26 @@ function setupBuilder() {
 
 function majorChanged() {
   updateRequirementDropdown();
+  refreshCardChoiceDropdowns();
   loadRequiredPlan();
+}
+
+function refreshCardChoiceDropdowns() {
+  // Rebuild card dropdowns when the user switches majors so CE Core, EE Core,
+  // Technical Elective, etc. always use the currently selected planning sheet.
+  const cards = [...document.querySelectorAll(".course-card")];
+  cards.forEach(card => {
+    const course = {
+      course_code: card.dataset.code,
+      comments: card.dataset.comments,
+      requirement_type: card.dataset.requirementType,
+      selected_course_code: card.dataset.selectedCourse,
+      source_term: card.dataset.sourceTerm,
+      status: card.dataset.status
+    };
+    const fresh = makeCourseCard(course);
+    card.replaceWith(fresh);
+  });
 }
 
 function updateRequirementDropdown() {
@@ -1320,6 +1374,65 @@ function getPlacedRequirementCounts() {
   return counts;
 }
 
+function baseRequirementTypeFromCourse(course) {
+  const code = String(course.course_code || "").trim();
+  const type = String(course.requirement_type || "").trim();
+
+  if (type && type !== "Required Course" && type !== "Searched Course") return type;
+
+  const parenIndex = code.indexOf("(");
+  const base = parenIndex >= 0 ? code.slice(0, parenIndex).trim() : code;
+
+  // These are the program-planning-sheet requirement labels that should expose
+  // a major-specific chooser directly on the card.
+  if (base.includes("Elective") || base.includes("Core") || base.includes("Breadth") || base.includes("Fields") || base.includes("Professional")) {
+    return base;
+  }
+
+  return type || "Required Course";
+}
+
+function optionListForType(type) {
+  const major = document.getElementById("scheduleMajor")?.value || Object.keys(MAJOR_DATA)[0];
+  return (MAJOR_DATA[major]?.dropdowns || {})[type] || [];
+}
+
+function makeCardChoiceHtml(cardId, type, selectedValue) {
+  const options = optionListForType(type);
+  if (!options.length) return "";
+
+  const datalistId = `card-options-${cardId}`;
+  const optionHtml = options.map(o => `<option value="${escapeHtml(o)}"></option>`).join("");
+  return `
+    <div class="card-choice-wrap">
+      <label>${escapeHtml(type)} choice</label>
+      <input class="card-choice" list="${datalistId}" value="${escapeHtml(selectedValue || "")}" placeholder="Search/select ${escapeHtml(type)}..." onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" oninput="cardChoiceChanged(event, this)">
+      <datalist id="${datalistId}">${optionHtml}</datalist>
+    </div>
+  `;
+}
+
+function cardChoiceChanged(event, input) {
+  event.stopPropagation();
+  const card = input.closest(".course-card");
+  const selected = input.value.trim();
+  const type = card.dataset.requirementType || requirementKeyFromCode(card.dataset.code || "");
+
+  if (!selected) return;
+
+  const selectedCode = parseCourseCode(selected);
+  card.dataset.code = `${type} (${selectedCode})`;
+  card.dataset.comments = selected;
+  card.dataset.selectedCourse = selectedCode;
+
+  const codeEl = card.querySelector(".code");
+  const commentEl = card.querySelector(".comment-text");
+  if (codeEl) codeEl.textContent = card.dataset.code;
+  if (commentEl) commentEl.textContent = selected;
+
+  loadRequiredPlan();
+}
+
 function makeCourseCard(course) {
   const card = document.createElement("div");
   card.className = "course-card";
@@ -1331,14 +1444,24 @@ function makeCourseCard(course) {
   card.ondragstart = dragCourse;
   card.dataset.code = course.course_code || "";
   card.dataset.comments = course.comments || "";
-  card.dataset.requirementType = course.requirement_type || "";
+  card.dataset.requirementType = baseRequirementTypeFromCourse(course);
   card.dataset.selectedCourse = course.selected_course_code || "";
   card.dataset.sourceTerm = course.source_term || "";
   card.dataset.status = course.status || "planned";
 
+  const choiceValue = course.comments || "";
+  const choiceHtml = makeCardChoiceHtml(card.id, card.dataset.requirementType, choiceValue);
+
   card.innerHTML = `
-    <div><div class="code">${escapeHtml(card.dataset.code)}</div><div class="detail">${escapeHtml(card.dataset.requirementType || "Course")}</div></div>
-    <div class="detail">${escapeHtml(card.dataset.comments)}<br>Status: ${escapeHtml(card.dataset.status)}</div>
+    <div>
+      <div class="code">${escapeHtml(card.dataset.code)}</div>
+      <div class="detail">${escapeHtml(card.dataset.requirementType || "Course")}</div>
+    </div>
+    <div class="detail">
+      <span class="comment-text">${escapeHtml(card.dataset.comments)}</span><br>
+      Status: ${escapeHtml(card.dataset.status)}
+      ${choiceHtml}
+    </div>
     <div class="course-actions">
       <button class="small success" onclick="markCompleted(event, this)">Completed/Transferred</button>
       <button class="small danger" onclick="removeCard(event, this)">Remove</button>

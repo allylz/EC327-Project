@@ -327,8 +327,19 @@ HTML = r"""
       <section>
         <h2>Schedule Builder</h2>
 
-        <input id="scheduleTitle" value="My EE Four-Year Plan" placeholder="Schedule title">
-        <textarea id="scheduleComments" placeholder="Schedule comments">Testing schedule from Flask UI.</textarea>
+       <input id="scheduleTitle" value="My EE Four-Year Plan" placeholder="Schedule title">
+
+<select id="scheduleMajor">
+  <option value="">Select major</option>
+  <option value="Electrical Engineering">Electrical Engineering</option>
+  <option value="Computer Engineering">Computer Engineering</option>
+  <option value="Mechanical Engineering">Mechanical Engineering</option>
+  <option value="Biomedical Engineering">Biomedical Engineering</option>
+  <option value="Computer Science">Computer Science</option>
+  <option value="Other">Other</option>
+</select>
+
+<textarea id="scheduleComments" placeholder="Schedule comments">Testing schedule from Flask UI.</textarea>
 
         <div class="layout-wide">
           <div>
@@ -539,6 +550,7 @@ function addManualCourse() {
 
 function buildScheduleJson() {
   const title = document.getElementById("scheduleTitle").value.trim();
+  const major = document.getElementById("scheduleMajor").value.trim();
   const comments = document.getElementById("scheduleComments").value.trim();
   const terms = {};
 
@@ -551,7 +563,12 @@ function buildScheduleJson() {
     terms[termName] = courses;
   });
 
-  return { title, comments, terms };
+  return {
+  title,
+  major,
+  comments,
+  terms
+};
 }
 
 function previewSchedule() { showResponse(buildScheduleJson()); }
@@ -563,6 +580,7 @@ function clearSchedule() {
 
 function renderSchedule(schedule) {
   document.getElementById("scheduleTitle").value = schedule.title || "";
+  document.getElementById("scheduleMajor").value = schedule.major || "";
   document.getElementById("scheduleComments").value = schedule.comments || "";
 
   document.querySelectorAll(".term-box").forEach(termBox => {

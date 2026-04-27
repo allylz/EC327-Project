@@ -1029,7 +1029,7 @@ app.get("/api/schedules/:id", async (req, res) => {
 
 app.post("/api/schedules", requireAuth, async (req, res) => {
   try {
-    const { title, comments, terms } = req.body;
+    const { title, major, comments, terms } = req.body;
 
     if (!title || !terms) {
       return res.status(400).json({
@@ -1105,7 +1105,7 @@ app.get("/api/my-schedule", requireAuth, async (req, res) => {
 
 app.put("/api/schedules/:id", requireAuth, async (req, res) => {
   try {
-    const { title, comments, terms } = req.body;
+    const { title, major, comments, terms } = req.body;
 
     const schedule = await prisma.schedule.findUnique({
       where: {
@@ -1136,16 +1136,16 @@ app.put("/api/schedules/:id", requireAuth, async (req, res) => {
     }
 
     const updated = await prisma.schedule.update({
-      where: {
+    where: {
         id: req.params.id,
-      },
-      data: {
+    },
+    data: {
         title,
+        major: major || null,
         comments,
         terms,
-      },
+    },
     });
-
     res.json(enrichSchedule(updated));
   } catch (err) {
     console.error("Update schedule error:", err);

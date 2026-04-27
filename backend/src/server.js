@@ -266,6 +266,77 @@ app.get("/api/gmail/auth", (req, res) => {
   }
 });
 
+app.post("/api/auth/resend-verification-code", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: "Email is required.",
+      });
+    }
+
+    const normalizedEmail = String(email).toLowerCase().trim();
+
+    if (!normalizedEmail.endsWith("@bu.edu")) {
+      return res.status(400).json({
+        error: "Only bu.edu emails are allowed.",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: "No user found with that email.",
+      });
+    }
+
+    if (user.verified) {
+      return res.status(400).json({
+        error: "This email is already verified.",
+      });
+    }
+
+    // Mark old codes as used so only the newest code matters
+    await prisma.emailVerificationCode.updateMany({
+      where: {
+        email: normalizedEmail,
+        used: false,
+      },
+      data: {
+        used: true,
+      },
+    });
+
+    const code = generateCode();
+
+    await prisma.emailVerificationCode.create({
+      data: {
+        email: normalizedEmail,
+        code,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
+
+    await sendVerificationEmail(normalizedEmail, code);
+
+    res.json({
+      message: "New verification code sent.",
+      devCode: process.env.NODE_ENV === "development" ? code : undefined,
+    });
+  } catch (err) {
+    console.error("Resend verification code error:", err);
+
+    res.status(500).json({
+      error: "Could not resend verification code.",
+      detail: err.message,
+    });
+  }
+});
+
 app.get("/api/gmail/oauth2callback", async (req, res) => {
   try {
     const code = req.query.code;

@@ -12,6 +12,7 @@ app.permanent_session_lifetime = timedelta(days=7)
 
 # Your Node/Express backend. Keep 127.0.0.1 if Flask and Node run on the same VPS.
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:4000")
+APP_VERSION = os.environ.get("APP_VERSION", "0.67.33")
 
 
 # =============================================================================
@@ -4950,6 +4951,174 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
     setTimeout(async()=>{ await refreshUserForTitleV30(); ensureVisibleTopToolsV30(); updateGraduatedCheckboxFromScheduleV30(); if(typeof setupHubChecklist === 'function') setupHubChecklist(getUnfulfilledHubUnits()); }, 100);
     setTimeout(()=>{ ensureVisibleTopToolsV30(); dedupeRequiredHeadingsV30(); setDegreePlanTitleV30(); }, 500);
     setTimeout(()=>{ ensureVisibleTopToolsV30(); dedupeRequiredHeadingsV30(); setDegreePlanTitleV30(); }, 1200);
+  });
+})();
+</script>
+</body>''')
+
+
+# =============================================================================
+# v33 final comb-through cleanup patch
+# - Adds a visible version badge so deployments are easy to verify.
+# - Forces the final Degree Plan title to use the logged-in backend user.
+# - Keeps one single-major dropdown and one Save/Load control group.
+# - Removes stale duplicate controls injected by older prototype patches.
+# - De-duplicates Required Courses headings/subtext.
+# =============================================================================
+BASE_HTML = BASE_HTML.replace("<title>BU Course Scheduler</title>", f"<title>BU Course Scheduler v{APP_VERSION}</title>")
+BASE_HTML = BASE_HTML.replace(
+    "<h1>BU Course Scheduler</h1>",
+    f'<h1>BU Course Scheduler <span class="version-badge">v{APP_VERSION}</span></h1>'
+)
+
+BASE_HTML = BASE_HTML.replace("</style>", r'''
+/* v33 final cleanup */
+.version-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  margin-left:8px;
+  padding:3px 9px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:850;
+  letter-spacing:.02em;
+  color:#dbeafe;
+  background:rgba(96,165,250,.22);
+  border:1px solid rgba(191,219,254,.35);
+  vertical-align:middle;
+}
+#degreeTopToolsV32{display:grid !important;grid-template-columns:minmax(260px, 1fr) minmax(280px, .85fr) !important;gap:12px !important;margin:12px 0 14px !important;max-width:900px !important;}
+#degreeTopToolsV32 .tool-card-v32{display:block !important;}
+#degreeTopToolsV32 #scheduleMajor.single-major-select-v32,#degreeTopToolsV32 #scheduleMajor{display:block !important;width:100% !important;min-height:40px !important;}
+#v28TopTools,#v30TopTools,#v30MajorBox,#v30ActionBox,#scheduleToolsV25,#scheduleToolsV26,#majorToolsV25,#majorToolsV26,.major-tools-v25,.major-tools-v26,.schedule-tools-v25,.schedule-tools-v26,#majorCheckboxGrid,.major-checkbox-grid{display:none !important;}
+.major-picker-shell{display:none !important;}
+#saveLoadBoxV32 .button-row-v32{display:grid !important;grid-template-columns:1fr 1fr;gap:8px;}
+#saveLoadBoxV32 button{margin:0 !important;}
+#lastSaveTimestampV32{font-size:12px;color:#64748b;margin-top:6px;}
+.required-heading-v20 h2{margin-bottom:2px;}
+@media(max-width:850px){#degreeTopToolsV32{grid-template-columns:1fr !important;max-width:none !important;}}
+</style>''')
+
+BASE_HTML = BASE_HTML.replace("</body>", r'''
+<script>
+(function(){
+  function v33FirstName(user){
+    if(!user) return 'My';
+    const raw = (user.displayName && String(user.displayName).trim()) || (user.email && String(user.email).trim()) || '';
+    if(!raw) return 'My';
+    const beforeAt = raw.split('@')[0].replace(/[._-]+/g, ' ').trim();
+    return beforeAt.split(/\s+/).filter(Boolean)[0] || 'My';
+  }
+  function v33PossessiveTitle(name){return (!name || name === 'My') ? 'My Degree Plan' : `${name}'s Degree Plan`;}
+  async function v33FetchUser(){
+    try{
+      const res = await fetch('/proxy/api/auth/me', {credentials:'same-origin'});
+      const data = await res.json();
+      const user = data.user || data.data?.user || null;
+      if(user){ window.CURRENT_USER = user; localStorage.setItem('lastKnownUser', JSON.stringify(user)); }
+      return user;
+    }catch(err){ try{return JSON.parse(localStorage.getItem('lastKnownUser') || 'null');}catch(e){return null;} }
+  }
+  async function setDegreePlanTitleV33(){
+    const user = await v33FetchUser();
+    const title = v33PossessiveTitle(v33FirstName(user));
+    const h = document.getElementById('degreePlanTitle');
+    const input = document.getElementById('scheduleTitle');
+    if(h) h.textContent = title;
+    if(input) input.value = title;
+    return title;
+  }
+  window.setDegreePlanTitleV33 = setDegreePlanTitleV33;
+  window.setDegreePlanTitleV32 = setDegreePlanTitleV33;
+  window.setDegreePlanTitleV30 = setDegreePlanTitleV33;
+  window.updateDegreePlanTitleV26 = setDegreePlanTitleV33;
+
+  function v33EnsureSingleMajorDropdown(){
+    const select = document.getElementById('scheduleMajor');
+    if(!select) return;
+    select.removeAttribute('multiple');
+    select.removeAttribute('size');
+    select.size = 1;
+    select.classList.add('single-major-select-v32');
+    select.style.display = 'block';
+    if(select.options.length === 0 && typeof MAJOR_DATA === 'object'){
+      Object.keys(MAJOR_DATA).forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; select.appendChild(opt); });
+    }
+    select.onchange = function(){ if(typeof majorChanged === 'function') majorChanged(); if(typeof saveLocalDegreeDraft === 'function') saveLocalDegreeDraft(); };
+  }
+
+  function v33CleanupDuplicates(){
+    document.querySelectorAll('#v28TopTools,#v30TopTools,#v30MajorBox,#v30ActionBox,#scheduleToolsV25,#scheduleToolsV26,#majorToolsV25,#majorToolsV26,.major-tools-v25,.major-tools-v26,.schedule-tools-v25,.schedule-tools-v26,#majorCheckboxGrid,.major-checkbox-grid').forEach(el=>el.remove());
+    document.querySelectorAll('.major-picker-shell').forEach(el=>{ el.style.display='none'; });
+    document.querySelectorAll('#degreeTopToolsV32').forEach((el,i)=>{ if(i>0) el.remove(); });
+    const panel = document.getElementById('requiredPanel');
+    if(panel){
+      const blocks=[...panel.querySelectorAll('.required-heading-v20')];
+      blocks.forEach((el,i)=>{ if(i>0) el.remove(); });
+      const h2s=[...panel.querySelectorAll('h2')].filter(h=>h.textContent.trim()==='Required Courses');
+      h2s.forEach((h,i)=>{ if(i>0 || !h.closest('.required-heading-v20')){ const next=h.nextElementSibling; if(next && next.matches('p,.muted')) next.remove(); h.remove(); } });
+      const descriptions=[...panel.querySelectorAll('p,.muted')].filter(p=>p.textContent.includes('Already-placed requirements'));
+      descriptions.forEach((p,i)=>{ if(i>0 || !p.closest('.required-heading-v20')) p.remove(); });
+    }
+  }
+  window.v33CleanupDuplicates = v33CleanupDuplicates;
+
+  function v33EnsureTopTools(){
+    const title = document.getElementById('degreePlanTitle');
+    const select = document.getElementById('scheduleMajor');
+    if(!title || !select) return;
+    let shell = document.getElementById('degreeTopToolsV32');
+    if(!shell){ shell = document.createElement('div'); shell.id = 'degreeTopToolsV32'; shell.className = 'degree-top-tools-v32'; title.insertAdjacentElement('afterend', shell); }
+    let majorBox = document.getElementById('majorDropdownBoxV32');
+    if(!majorBox){ majorBox = document.createElement('div'); majorBox.id = 'majorDropdownBoxV32'; majorBox.className = 'tool-card-v32'; majorBox.innerHTML = '<label>Major</label>'; shell.appendChild(majorBox); }
+    if(!select.closest('#majorDropdownBoxV32')) majorBox.appendChild(select);
+    let actionBox = document.getElementById('saveLoadBoxV32');
+    if(!actionBox){
+      actionBox = document.createElement('div');
+      actionBox.id = 'saveLoadBoxV32';
+      actionBox.className = 'tool-card-v32 save-load-v32';
+      actionBox.innerHTML = `<label>Saved plan</label><div class="button-row-v32"><button type="button" onclick="saveScheduleV32()">Save</button><button type="button" class="secondary" onclick="loadMyScheduleV32()">Load saved</button></div><div id="lastSaveTimestampV32" class="muted last-save-v32">Last save: never</div>`;
+      shell.appendChild(actionBox);
+    }
+    v33CleanupDuplicates();
+    if(typeof updateLastSaveV32 === 'function') updateLastSaveV32();
+  }
+
+  if(typeof buildScheduleJson === 'function'){
+    const previousBuildScheduleJsonV33 = buildScheduleJson;
+    buildScheduleJson = function(){
+      const schedule = previousBuildScheduleJsonV33();
+      const select = document.getElementById('scheduleMajor');
+      schedule.major = select ? select.value : (schedule.major || '');
+      delete schedule.majors;
+      const h = document.getElementById('degreePlanTitle');
+      schedule.title = h ? h.textContent.trim() : (schedule.title || 'Degree Plan');
+      return schedule;
+    };
+  }
+  window.saveScheduleV32 = async function(){
+    if(typeof saveSchedule !== 'function') return;
+    await setDegreePlanTitleV33();
+    const result = await saveSchedule();
+    const now = new Date().toISOString();
+    localStorage.setItem('degreeScheduleServerSaveAt', now);
+    localStorage.setItem('degreeScheduleDraftSavedAt', now);
+    if(typeof updateLastSaveV32 === 'function') updateLastSaveV32();
+    return result;
+  };
+  window.loadMyScheduleV32 = async function(){
+    if(typeof loadMySchedule !== 'function') return;
+    const result = await loadMySchedule();
+    setTimeout(async()=>{ v33EnsureSingleMajorDropdown(); v33EnsureTopTools(); await setDegreePlanTitleV33(); v33CleanupDuplicates(); }, 0);
+    return result;
+  };
+  const previousHeaderAuthV33 = (typeof updateHeaderAuth === 'function') ? updateHeaderAuth : null;
+  if(previousHeaderAuthV33){ updateHeaderAuth = async function(){ const result = await previousHeaderAuthV33(); await setDegreePlanTitleV33(); v33EnsureSingleMajorDropdown(); v33EnsureTopTools(); return result; }; }
+  window.addEventListener('load', async ()=>{
+    await setDegreePlanTitleV33(); v33EnsureSingleMajorDropdown(); v33EnsureTopTools(); v33CleanupDuplicates();
+    setTimeout(async()=>{ await setDegreePlanTitleV33(); v33EnsureSingleMajorDropdown(); v33EnsureTopTools(); v33CleanupDuplicates(); }, 350);
+    setTimeout(async()=>{ await setDegreePlanTitleV33(); v33EnsureSingleMajorDropdown(); v33EnsureTopTools(); v33CleanupDuplicates(); }, 1200);
   });
 })();
 </script>

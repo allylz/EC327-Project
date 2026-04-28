@@ -3642,7 +3642,7 @@ window.addEventListener("load", () => { setTimeout(applyV20Ui, 400); });
     .button-row-v32{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
     .last-save-v32{margin-top:6px;font-size:12px;}
     #majorToolsV25,#majorToolsV26,#scheduleToolsV25,#scheduleToolsV26,.major-tools-v25,.major-tools-v26,.schedule-tools-v25,.schedule-tools-v26{display:none !important;}
-    @media(max-width:780px){#degreeTopToolsV32{grid-template-columns:1fr;max-width:none;}}
+    @media(max-width:780px){ #degreeTopToolsV32{grid-template-columns:1fr;max-width:none;}}
   `;
   document.head.appendChild(style);
 

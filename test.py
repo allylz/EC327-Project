@@ -1382,7 +1382,54 @@ BASE_HTML = r"""
     .cal-event{border-radius:10px !important;border-width:1px !important;}
     @media(max-width:1100px){.builder-workspace{padding-right:0 !important}.required-side{position:static !important;width:100% !important;height:auto !important;transform:none !important}.right-tools{display:block}.required-bank{max-height:none !important}.required-toggle{display:none !important}.settings-grid{grid-template-columns:1fr !important}}
 
-</style>
+
+    /* v20 polish: fixed card actions, right rail menu, color-coded planner */
+    :root { --required-panel-w: clamp(520px, 34vw, 760px); --right-rail-w: var(--required-panel-w); }
+    .course-card { position: relative !important; border-radius: 12px !important; box-shadow: 0 3px 9px rgba(15,23,42,.07) !important; border-width: 1px !important; }
+    .course-card .x-remove { position:absolute; top:6px; right:6px; width:22px; height:22px; min-width:22px; padding:0; border-radius:999px; display:grid; place-items:center; font-size:14px; line-height:1; background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+    .course-card .x-remove:hover { background:#fecaca; }
+    .course-card .code { padding-right: 26px; }
+    .course-actions { margin-top: 8px; display:flex; align-items:center; gap:6px; justify-content:flex-start; }
+    .comment-icon-button { width:auto !important; min-width:36px; padding:4px 8px !important; border-radius:999px !important; background:#eef2ff !important; color:#3730a3 !important; border:1px solid #c7d2fe !important; font-size:12px !important; }
+    .comment-icon-button:hover { background:#e0e7ff !important; }
+    .comment-count { font-weight:800; }
+    .course-card.type-hub { background:#fff7ed !important; border-color:#fed7aa !important; }
+    .course-card.type-core { background:#eef2ff !important; border-color:#c7d2fe !important; }
+    .course-card.type-tech { background:#ecfdf5 !important; border-color:#bbf7d0 !important; }
+    .course-card.type-writing { background:#fdf2f8 !important; border-color:#fbcfe8 !important; }
+    .course-card.type-general { background:#f8fafc !important; border-color:#dbe4f0 !important; }
+    .course-card.type-required { background:#eff6ff !important; border-color:#bfdbfe !important; }
+    .course-card .detail { color:#475569; }
+    .course-card .status-text, .completed-toggle { display:none !important; }
+    .card-choice-wrap { margin-top:6px; }
+    .term-box { background:#f8fafc !important; }
+    .term-box[data-term*="Freshman Fall"], .term-box[data-term*="Senior Fall"] { background:#fef9c3 !important; border-color:#fde68a !important; }
+    .term-box[data-term*="Freshman Spring"], .term-box[data-term*="Senior Spring"] { background:#e0f2fe !important; border-color:#bae6fd !important; }
+    .term-box[data-term*="Sophomore"] { background:#f3e8ff !important; border-color:#e9d5ff !important; }
+    .term-box[data-term*="Junior"] { background:#dcfce7 !important; border-color:#bbf7d0 !important; }
+    .term-box[data-term="Transferred Courses"] { background:#fff1f2 !important; border-color:#fecdd3 !important; }
+    .builder-top, .bottom-hub-tracker { width: calc(100% - var(--required-panel-w) - 20px) !important; max-width: none !important; box-sizing: border-box !important; }
+    .builder-top .settings-grid { grid-template-columns: minmax(260px, 1fr) minmax(380px, 1.4fr) !important; }
+    .bottom-hub-tracker { margin-top: 12px !important; }
+    .required-side { top: calc(var(--header-h) + 12px) !important; height: calc(100vh - var(--header-h) - 24px) !important; }
+    .required-bank { display:flex !important; flex-direction:column !important; overflow:hidden !important; padding:0 !important; }
+    .required-scroll-menu { overflow:auto; padding:10px; height:100%; box-sizing:border-box; }
+    .right-tools { display:block !important; }
+    .right-menu-block { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:10px; margin-bottom:10px; }
+    .right-menu-block h2 { font-size:15px; margin:0 0 8px; border-bottom:0; padding:0; }
+    .open-add-course-button { width:100%; background:#7c3aed !important; }
+    #addCourseModal .modal { max-width: 980px; width:min(980px, 94vw); }
+    #addCourseModal .compact-section { box-shadow:none !important; border:0 !important; padding:0 !important; margin:0 !important; background:transparent !important; }
+    #addCourseModal .compact-section h2 { display:none; }
+    .flash-target { animation: flashTarget 900ms ease-out; }
+    @keyframes flashTarget { 0% { box-shadow:0 0 0 0 rgba(124,58,237,.35); transform:translateY(-2px); } 70% { box-shadow:0 0 0 12px rgba(124,58,237,0); } 100% { box-shadow:none; transform:none; } }
+    #semesterScheduleComments { display:block !important; min-height:80px !important; margin-top:10px !important; }
+    .semester-comment-box { margin-top:12px; padding:12px; border:1px solid #dbe4f0; border-radius:14px; background:#fff; }
+    .cal-event { opacity:.92 !important; color:#0f172a !important; text-shadow:none !important; }
+    .section-chip .section-meta { color:#475569 !important; }
+    @media (max-width: 1100px) { .builder-top, .bottom-hub-tracker { width:100% !important; } }
+
+  </style>
 </head>
 <body>
 <header>
@@ -1665,11 +1712,16 @@ function setupHubChecklist(unfulfilledUnits=null) {
 }
 
 function getUnfulfilledHubUnits() {
-  const fulfilled = new Set();
+  const fulfilledFamilies = new Set();
   document.querySelectorAll(".course-card").forEach(card => {
-    try { JSON.parse(card.dataset.hubUnits || "[]").forEach(u => fulfilled.add(u)); } catch {}
+    try {
+      JSON.parse(card.dataset.hubUnits || "[]").forEach(u => {
+        const fam = hubFamily(u);
+        if (fam) fulfilledFamilies.add(fam);
+      });
+    } catch {}
   });
-  return HUB_UNITS.filter(u => !fulfilled.has(u));
+  return HUB_UNITS.filter(unit => !fulfilledFamilies.has(hubFamily(unit)));
 }
 
 function toggleRequiredPanel() {
@@ -2000,11 +2052,27 @@ function cardChoiceChanged(event, input) {
   loadRequiredPlan();
 }
 
+function courseCardTypeClass(course, requirementType) {
+  const code = String(course.course_code || "");
+  const type = String(requirementType || code);
+  if (code.includes("Hub Elective") || type.includes("Hub")) return "type-hub";
+  if (type.includes("Core") || type.includes("Breadth") || type.includes("Fields") || type.includes("Professional") || type.includes("BME")) return "type-core";
+  if (type.includes("Technical") || type.includes("Advanced") || type.includes("Engineering Elective") || type.includes("Computer Engineering Elective")) return "type-tech";
+  if (code.includes("WR") || type.includes("Writing")) return "type-writing";
+  if (type.includes("Required")) return "type-required";
+  return "type-general";
+}
+
+function commentCountText(comments) {
+  const n = String(comments || "").trim() ? 1 : 0;
+  if (n <= 0) return "0";
+  if (n > 9) return "9+";
+  return String(n);
+}
+
 function makeCourseCard(course) {
   const card = document.createElement("div");
   card.className = "course-card";
-  const isTransferred = course.transferred === true || course.transferred === "true" || (course.status || "").toLowerCase().includes("transferred");
-  if (isTransferred) card.classList.add("completed");
   if ((course.course_code || "").includes("Elective")) card.classList.add("placeholder");
 
   card.id = "course-" + nextCardId++;
@@ -2016,23 +2084,26 @@ function makeCourseCard(course) {
   card.dataset.selectedCourse = course.selected_course_code || "";
   card.dataset.sourceTerm = course.source_term || "";
   card.dataset.sublabel = course.sublabel || "";
-  card.dataset.transferred = isTransferred ? "true" : "false";
-  card.dataset.status = isTransferred ? "transferred" : (course.status || "planned");
   card.dataset.sections = JSON.stringify(course.selected_sections || []);
   card.dataset.hubUnits = JSON.stringify(course.hub_units || course.hub_areas || []);
+  card.dataset.status = "planned";
+  card.dataset.transferred = "false";
+  card.classList.add(courseCardTypeClass(course, card.dataset.requirementType));
 
   const choiceValue = course.comments || "";
   const choiceHtml = makeCardChoiceHtml(card.id, card.dataset.requirementType, choiceValue);
   const hubHtml = makeHubPickerHtml(card);
+  const cCount = commentCountText(card.dataset.comments);
 
   card.innerHTML = `
-    <div><div class="code">${escapeHtml(card.dataset.code)}</div><div class="detail sublabel-text">${escapeHtml(card.dataset.sublabel || card.dataset.requirementType || "Course")}</div></div>
-    <div class="detail"><span class="comment-text">${escapeHtml(card.dataset.comments)}</span><br>Status: <span class="status-text">${escapeHtml(card.dataset.status)}</span>${choiceHtml}${hubHtml}</div>
+    <button class="x-remove" title="Remove course" onclick="removeCard(event, this)">×</button>
+    <div class="course-main">
+      <div class="code">${escapeHtml(card.dataset.code)}</div>
+      <div class="detail sublabel-text">${escapeHtml(card.dataset.sublabel || card.dataset.requirementType || "Course")}</div>
+      <div class="detail"><span class="comment-text">${escapeHtml(card.dataset.comments)}</span>${choiceHtml}${hubHtml}</div>
+    </div>
     <div class="course-actions">
-      <label class="completed-toggle" onclick="event.stopPropagation()"><input type="checkbox" ${card.dataset.transferred === "true" ? "checked" : ""} onchange="toggleTransferred(event, this)"> Transferred</label>
-      <button class="small comment-button" onclick="openCommentModal(event, this)">Comments</button>
-      <button class="small success" onclick="markTransferred(event, this)">Transfer</button>
-      <button class="small danger" onclick="removeCard(event, this)">Remove</button>
+      <button class="small comment-icon-button" title="Comments" onclick="openCommentModal(event, this)">💬 <span class="comment-count">${cCount}</span></button>
     </div>`;
   return card;
 }
@@ -2290,6 +2361,12 @@ function applyHubCourseToAddForm(course) {
   document.getElementById("manualCourseComment").value = course.course_title || "";
   setupManualHubUnitControls("manualHubUnits", course.hub_areas || []);
   showToast(`Selected ${course.course_code} for Hub Elective.`);
+  const palette = document.getElementById("coursePalette");
+  if (palette) {
+    palette.scrollIntoView({ behavior: "smooth", block: "center" });
+    palette.classList.add("flash-target");
+    setTimeout(() => palette.classList.remove("flash-target"), 1000);
+  }
 }
 
 function openHubModal(event, button) {
@@ -2311,10 +2388,15 @@ function applyHubCourseToActiveCard(course) {
   ACTIVE_HUB_CARD.querySelector(".code").textContent = ACTIVE_HUB_CARD.dataset.code;
   const commentEl = ACTIVE_HUB_CARD.querySelector(".comment-text");
   if (commentEl) commentEl.textContent = ACTIVE_HUB_CARD.dataset.comments;
+  const countEl = ACTIVE_HUB_CARD.querySelector(".comment-count");
+  if (countEl) countEl.textContent = commentCountText(ACTIVE_HUB_CARD.dataset.comments);
   refreshHubSummary(ACTIVE_HUB_CARD);
   setupHubChecklist(getUnfulfilledHubUnits());
   saveLocalDegreeDraft();
   closeModal("hubModal");
+  ACTIVE_HUB_CARD.scrollIntoView({ behavior: "smooth", block: "center" });
+  ACTIVE_HUB_CARD.classList.add("flash-target");
+  setTimeout(() => ACTIVE_HUB_CARD?.classList.remove("flash-target"), 1000);
 }
 
 function saveHubModalUnits() {
@@ -2444,16 +2526,13 @@ function buildScheduleJson() {
         selected_sections: safeJson(card.dataset.sections, []),
         hub_units: safeJson(card.dataset.hubUnits, []),
         source_term: card.dataset.sourceTerm || "",
-        sublabel: card.dataset.sublabel || "",
-        status: card.dataset.status || "planned",
-        transferred: card.dataset.transferred === "true"
+        sublabel: card.dataset.sublabel || ""
       });
     });
   });
 
   return { title, major, majors, comments, hub_unfulfilled: getUnfulfilledHubUnits(), terms };
 }
-
 
 function saveLocalDegreeDraft() {
   try {
@@ -2580,7 +2659,7 @@ function renderSchedule(schedule) {
     if (term === "Required Courses") return;
     ensureTermBox(term, term === "Transferred Courses");
     const box = document.querySelector(`.term-box[data-term="${cssEscape(term)}"]`);
-    courses.forEach(c => box.appendChild(makeCourseCard(c)));
+    (courses || []).forEach(c => box.appendChild(makeCourseCard(c)));
   });
   loadRequiredPlan();
   saveLocalDegreeDraft();
@@ -2732,7 +2811,132 @@ function setupAutoBackendSaveV19(){
   root.addEventListener('input',()=>{ clearTimeout(timer); timer=setTimeout(()=>{ saveLocalDegreeDraft(); },250); });
 }
 
+
+/* v20 requested behavior overrides */
+function ensureTermBoxV20(termName, special=false) {
+  if (document.querySelector(`.term-box[data-term="${cssEscape(termName)}"]`)) return;
+  const grid = document.getElementById("termGrid");
+  if (!grid) return;
+  const box = document.createElement("div");
+  box.className = "term-box" + (special ? " special" : "");
+  box.dataset.term = termName;
+  box.ondragover = allowDrop;
+  box.ondrop = dropCourse;
+  const removable = termName !== "Transferred Courses";
+  box.innerHTML = `<div class="term-title"><span>${escapeHtml(termName)}</span><div class="term-title-actions"><button class="small secondary" onclick="moveTermBox(event, this, -1)">↑</button><button class="small secondary" onclick="moveTermBox(event, this, 1)">↓</button>${removable ? `<button class="small danger" onclick="removeTermBox(event, this)">Remove</button>` : ""}</div></div>`;
+  if (termName === "Transferred Courses") grid.insertBefore(box, grid.firstChild);
+  else grid.appendChild(box);
+}
+ensureTermBox = ensureTermBoxV20;
+removeTransferredTermV19 = function(){};
+
+function ensureRequiredScrollMenuV20(){
+  const bank=document.querySelector('.required-bank');
+  if(!bank) return document.createElement('div');
+  let menu=bank.querySelector('.required-scroll-menu');
+  if(menu) return menu;
+  menu=document.createElement('div');
+  menu.className='required-scroll-menu';
+  while(bank.firstChild) menu.appendChild(bank.firstChild);
+  bank.appendChild(menu);
+  return menu;
+}
+function setupAddCoursePopupV20(){
+  const addSection=[...document.querySelectorAll('section.compact-section')].find(sec=>sec.querySelector('h2')?.textContent.trim()==='Add Course');
+  const panel=document.getElementById('requiredPanel');
+  if(!addSection || !panel || document.getElementById('addCourseModal')) return;
+  const modal=document.createElement('div');
+  modal.id='addCourseModal';
+  modal.className='modal-backdrop add-course-modal';
+  modal.innerHTML='<div class="modal"><div class="modal-header"><h2>Add Course</h2><button class="secondary" onclick="closeModal(\'addCourseModal\')">Close</button></div><div id="addCourseModalBody"></div></div>';
+  document.body.appendChild(modal);
+  modal.querySelector('#addCourseModalBody').appendChild(addSection);
+  const btnBlock=document.createElement('div');
+  btnBlock.className='right-menu-block add-course-launch';
+  btnBlock.innerHTML='<h2>Add Course</h2><button class="open-add-course-button" onclick="openAddCourseModal()">+ Add Course</button><p class="muted">Add regular courses, Hub electives, or major-specific elective placeholders.</p>';
+  const scrollMenu=ensureRequiredScrollMenuV20();
+  scrollMenu.insertBefore(btnBlock, scrollMenu.firstChild);
+}
+function openAddCourseModal(){ document.getElementById('addCourseModal')?.classList.add('visible'); setTimeout(()=>document.getElementById('addCourseModal')?.querySelector('.modal')?.classList.add('flash-target'),0); }
+const originalRestructureBuilderV20 = restructureBuilderV19;
+restructureBuilderV19 = function(){
+  originalRestructureBuilderV20();
+  const panel=document.getElementById('requiredPanel');
+  const menu=ensureRequiredScrollMenuV20();
+  const rightTools=panel?.querySelector('.right-tools');
+  const requiredCourseBank=document.getElementById('requiredCourseBank');
+  if(rightTools && rightTools.parentElement !== menu) menu.insertBefore(rightTools, menu.firstChild);
+  if(requiredCourseBank && requiredCourseBank.parentElement !== menu) menu.appendChild(requiredCourseBank);
+  if(!menu.querySelector('.required-heading-v20')){
+    const header=document.createElement('div'); header.className='right-menu-block required-heading-v20'; header.innerHTML='<h2>Required Courses</h2><p class="muted">Drag these into semesters. Already-placed requirements are hidden here.</p>';
+    if(requiredCourseBank) menu.insertBefore(header, requiredCourseBank);
+  }
+  setupAddCoursePopupV20();
+};
+function classifyAllCourseCardsV20(){
+  document.querySelectorAll('.course-card').forEach(card=>{
+    ['type-hub','type-core','type-tech','type-writing','type-general','type-required'].forEach(c=>card.classList.remove(c));
+    card.classList.add(courseCardTypeClass({course_code: card.dataset.code || ''}, card.dataset.requirementType || ''));
+  });
+}
+const originalDropCourseV20=dropCourse;
+dropCourse=function(event){ originalDropCourseV20(event); classifyAllCourseCardsV20(); queueServerAutosaveV20(); };
+const originalRemoveCardV20=removeCard;
+removeCard=function(event, button){ originalRemoveCardV20(event, button); queueServerAutosaveV20(); };
+const originalCardChoiceChangedV20=cardChoiceChanged;
+cardChoiceChanged=function(event,input){ originalCardChoiceChangedV20(event,input); classifyAllCourseCardsV20(); queueServerAutosaveV20(); };
+const originalSaveHubModalUnitsV20=saveHubModalUnits;
+saveHubModalUnits=function(){ originalSaveHubModalUnitsV20(); queueServerAutosaveV20(); };
+let SERVER_AUTOSAVE_TIMER_V20=null;
+async function silentSaveScheduleToServerV20(){
+  if(!document.getElementById('termGrid')) return;
+  try{
+    const schedule=buildScheduleJson();
+    if(!schedule.title || !schedule.terms) return;
+    const res=await fetch('/proxy/api/schedules',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(schedule)});
+    if(res.ok){ localStorage.setItem('degreeSchedulePulledAt', new Date().toISOString()); }
+  }catch(err){ console.warn('Background schedule save skipped', err); }
+}
+function queueServerAutosaveV20(){ clearTimeout(SERVER_AUTOSAVE_TIMER_V20); SERVER_AUTOSAVE_TIMER_V20=setTimeout(silentSaveScheduleToServerV20, 1200); }
+const originalSaveLocalDegreeDraftV20 = saveLocalDegreeDraft;
+saveLocalDegreeDraft = function(){ originalSaveLocalDegreeDraftV20(); queueServerAutosaveV20(); setupHubChecklist(getUnfulfilledHubUnits()); };
+const originalAddManualCourseV20=addManualCourse;
+addManualCourse=function(){ originalAddManualCourseV20(); closeModal('addCourseModal'); const pal=document.getElementById('coursePalette'); pal?.scrollIntoView({behavior:'smooth', block:'center'}); pal?.classList.add('flash-target'); setTimeout(()=>pal?.classList.remove('flash-target'),900); classifyAllCourseCardsV20(); queueServerAutosaveV20(); };
+function moveSemesterCommentsBoxV20(){
+  const textarea=document.getElementById('semesterScheduleComments');
+  const hub=document.getElementById('semesterHubSuggestions');
+  if(!textarea || !hub || textarea.closest('.semester-comment-box')) return;
+  const wrap=document.createElement('div');
+  wrap.className='semester-comment-box';
+  wrap.innerHTML='<h3>Current semester notes</h3><p class="muted">Private local notes for this working semester schedule.</p>';
+  hub.insertAdjacentElement('afterend', wrap);
+  wrap.appendChild(textarea);
+}
+function pastelForCourseV20(code){
+  const colors=[['#dbeafe','#93c5fd'],['#dcfce7','#86efac'],['#fef3c7','#fcd34d'],['#fce7f3','#f9a8d4'],['#ede9fe','#c4b5fd'],['#cffafe','#67e8f9'],['#ffedd5','#fdba74'],['#e0f2fe','#7dd3fc'],['#f5f3ff','#ddd6fe'],['#ecfccb','#bef264']];
+  let h=0; String(code||'').split('').forEach(ch=>h=(h*31+ch.charCodeAt(0))>>>0);
+  return colors[h%colors.length];
+}
+const originalDrawSectionEventV20=drawSectionEvent;
+drawSectionEvent=function(layer, sec, extraClass){
+  const before=layer.children.length;
+  originalDrawSectionEventV20(layer, sec, extraClass);
+  for(let i=before;i<layer.children.length;i++){
+    const ev=layer.children[i];
+    if(!extraClass){ const [bg,border]=pastelForCourseV20(sec.course_code); ev.style.background=bg; ev.style.borderColor=border; }
+  }
+};
+function applyV20Ui(){
+  restructureBuilderV19();
+  classifyAllCourseCardsV20();
+  moveSemesterCommentsBoxV20();
+  ensureTermBox('Transferred Courses', true);
+  const grid=document.getElementById('termGrid'); const transfer=document.querySelector('.term-box[data-term="Transferred Courses"]'); if(grid&&transfer&&grid.firstChild!==transfer)grid.insertBefore(transfer, grid.firstChild);
+}
+window.addEventListener('load',()=>{ setTimeout(applyV20Ui, 100); setTimeout(applyV20Ui, 650); });
+
 window.addEventListener("load", () => { setupBuilder(); applyV19Ui(); setTimeout(applyV19Ui, 250); });
+window.addEventListener("load", () => { setTimeout(applyV20Ui, 400); });
 </script>
 """
 

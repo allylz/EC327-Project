@@ -1012,6 +1012,106 @@ app.get("/api/courses/hub", (_req, res) => {
   res.json(hubCourses);
 });
 
+function normalizeCommentCourseCode(code) {
+  return String(code || "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+
+app.get("/api/course-comments", async (req, res) => {
+  try {
+    const courseCode = normalizeCommentCourseCode(req.query.course_code);
+
+    if (!courseCode) {
+      return res.status(400).json({ error: "course_code query parameter is required." });
+    }
+
+    const comments = await prisma.courseComment.findMany({
+      where: { courseCode },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    res.json({ course_code: courseCode, comments });
+  } catch (err) {
+    console.error("Get course comments error:", err);
+    res.status(500).json({ error: "Could not get course comments.", detail: err.message });
+  }
+});
+
+app.post("/api/course-comments", requireAuth, async (req, res) => {
+  try {
+    const courseCode = normalizeCommentCourseCode(req.body.course_code);
+    const body = String(req.body.body || "").trim();
+
+    if (!courseCode || !body) {
+      return res.status(400).json({ error: "course_code and body are required." });
+    }
+
+    const comment = await prisma.courseComment.upsert({
+      where: {
+        creatorId_courseCode: {
+          creatorId: req.session.userId,
+          courseCode,
+        },
+      },
+      update: { body },
+      create: {
+        creatorId: req.session.userId,
+        courseCode,
+        body,
+      },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    res.status(200).json({ message: "Course comment saved.", comment });
+  } catch (err) {
+    console.error("Save course comment error:", err);
+    res.status(500).json({ error: "Could not save course comment.", detail: err.message });
+  }
+});
+
+app.delete("/api/course-comments/:id", requireAuth, async (req, res) => {
+  try {
+    const comment = await prisma.courseComment.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!comment) {
+      return res.status(404).json({ error: "Comment not found." });
+    }
+
+    if (comment.creatorId !== req.session.userId) {
+      return res.status(403).json({ error: "You can only delete your own comments." });
+    }
+
+    await prisma.courseComment.delete({ where: { id: req.params.id } });
+    res.json({ message: "Course comment deleted." });
+  } catch (err) {
+    console.error("Delete course comment error:", err);
+    res.status(500).json({ error: "Could not delete course comment.", detail: err.message });
+  }
+});
+
+
 app.get("/api/courses/:courseCode", (req, res) => {
   const courseCode = normalizeCourseCode(req.params.courseCode);
 

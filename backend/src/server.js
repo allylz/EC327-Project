@@ -1054,9 +1054,14 @@ app.post("/api/course-comments", requireAuth, async (req, res) => {
   try {
     const courseCode = normalizeCommentCourseCode(req.body.course_code);
     const body = String(req.body.body || "").trim();
+    const professorName = String(req.body.professor_name || "").trim();
 
     if (!courseCode || !body) {
       return res.status(400).json({ error: "course_code and body are required." });
+    }
+
+    if (!professorName) {
+      return res.status(400).json({ error: "professor_name is required." });
     }
 
     const comment = await prisma.courseComment.upsert({
@@ -1066,11 +1071,12 @@ app.post("/api/course-comments", requireAuth, async (req, res) => {
           courseCode,
         },
       },
-      update: { body },
+      update: { body, professorName },
       create: {
         creatorId: req.session.userId,
         courseCode,
         body,
+        professorName,
       },
       include: {
         creator: {

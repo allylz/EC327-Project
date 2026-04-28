@@ -19,7 +19,6 @@ BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:4000")
 # =============================================================================
 
 TERM_LABELS = [
-    "Transferred Courses",
     "Freshman Fall",
     "Freshman Spring",
     "Freshman Summer",
@@ -1306,6 +1305,83 @@ BASE_HTML = r"""
     @media (min-width: 1500px) { :root { --required-panel-w: clamp(520px, 30vw, 720px); } .required-group { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)) !important; } }
     @media (max-width: 1100px) { .builder-workspace { display: block !important; padding-right: 0 !important; } .required-side { position: static !important; width: 100% !important; max-width: none !important; height: auto !important; transform: none !important; margin-top: 14px !important; } .required-toggle { display: none !important; } .required-bank { max-height: none !important; height: auto !important; } }
 
+
+
+    /* v19 requested UI polish: compact settings, right utility rail, pastel contrast */
+    :root{
+      --pastel-blue:#eaf3ff;
+      --pastel-green:#ecfdf3;
+      --pastel-purple:#f3edff;
+      --pastel-peach:#fff2e6;
+      --pastel-pink:#fff0f6;
+      --pastel-yellow:#fff9db;
+      --right-rail-w: clamp(500px, 34vw, 720px);
+    }
+    .builder-page{padding:0 !important;}
+    .builder-top{
+      margin:0 0 10px 0 !important;
+      padding:10px 12px !important;
+      border-radius:14px !important;
+      background:linear-gradient(135deg,#f8fbff,#f2fff8) !important;
+    }
+    .builder-top h2{font-size:18px !important;margin-bottom:6px !important;}
+    .settings-grid{display:grid !important;grid-template-columns:minmax(240px, 1fr) minmax(300px, 1fr) !important;gap:10px !important;align-items:start !important;}
+    #scheduleComments{min-height:44px !important;margin-top:8px !important;}
+    #scheduleMajor{display:none !important;}
+    .major-checkbox-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px;background:white;border:1px solid #dbe4f0;border-radius:12px;padding:8px;}
+    .major-checkbox-grid label{display:flex;gap:6px;align-items:center;font-size:13px;font-weight:750;color:#334155;background:#f8fafc;border:1px solid #e5edf6;border-radius:10px;padding:7px 8px;}
+    .major-checkbox-grid input{width:auto;margin:0;accent-color:#2563eb;}
+    .hub-check-panel{margin-top:14px !important;background:#fff !important;border:1px solid #dbe4f0 !important;border-radius:14px !important;padding:12px !important;}
+    .hub-check-panel h3{margin-top:0 !important;}
+    .hub-check-panel.bottom-hub-tracker{margin:14px 0 0 0 !important;}
+    .builder-workspace{display:block !important;padding-right:calc(var(--right-rail-w) + 12px) !important;}
+    .schedule-side{width:100% !important;}
+    .required-side{
+      position:fixed !important;
+      top:calc(var(--header-h) + 10px) !important;
+      right:8px !important;
+      width:var(--right-rail-w) !important;
+      height:calc(100vh - var(--header-h) - 18px) !important;
+      display:flex !important;
+      flex-direction:column !important;
+      gap:10px !important;
+      z-index:35 !important;
+      overflow:visible !important;
+      transition:transform .24s ease !important;
+    }
+    .required-side.collapsed{transform:translateX(calc(100% - 42px)) !important;}
+    .required-toggle{top:16px !important;}
+    .right-tools{display:flex;flex-direction:column;gap:10px;min-height:0;}
+    .right-tools .compact-section{margin:0 !important;border-radius:16px !important;background:#ffffff !important;}
+    .right-tools .compact-section:nth-child(1){background:var(--pastel-blue) !important;border-color:#bfdbfe !important;}
+    .right-tools .compact-section:nth-child(2){background:var(--pastel-purple) !important;border-color:#ddd6fe !important;}
+    .right-tools .scrollbox{max-height:190px !important;}
+    .required-bank{flex:1 1 auto !important;min-height:0 !important;overflow:auto !important;background:var(--pastel-green) !important;border-color:#bbf7d0 !important;border-radius:16px !important;}
+    .required-group{grid-template-columns:repeat(auto-fill,minmax(145px,1fr)) !important;}
+    .required-group-title{background:rgba(236,253,243,.96) !important;}
+    .compact-section:has(#termGrid), .compact-section:has(.bottom-add-semester){background:#fff !important;border-radius:16px !important;}
+    .term-box:nth-child(6n+1){background:#ffffff !important;border-color:#cfe3ff !important;}
+    .term-box:nth-child(6n+2){background:#fffdf2 !important;border-color:#fde68a !important;}
+    .term-box:nth-child(6n+3){background:#f8f3ff !important;border-color:#ddd6fe !important;}
+    .term-box:nth-child(6n+4){background:#f0fdf4 !important;border-color:#bbf7d0 !important;}
+    .term-box:nth-child(6n+5){background:#fff7ed !important;border-color:#fed7aa !important;}
+    .term-box:nth-child(6n){background:#fdf2f8 !important;border-color:#fbcfe8 !important;}
+    .course-card{background:#fff !important;border-color:#d7e0ee !important;box-shadow:0 4px 10px rgba(15,23,42,.06) !important;}
+    .course-actions .completed-toggle,.course-actions button.success{display:none !important;}
+    .bottom-add-semester{background:var(--pastel-yellow) !important;border-color:#fde68a !important;}
+    .flash-open{animation:flashOpen .65s ease;}
+    @keyframes flashOpen{0%{box-shadow:0 0 0 0 rgba(37,99,235,.55);transform:scale(.996);}55%{box-shadow:0 0 0 9px rgba(37,99,235,.08);}100%{box-shadow:none;transform:none;}}
+    /* current semester page polish */
+    .semester-left{background:#f8fbff !important;border:1px solid #dbeafe !important;border-radius:16px !important;padding:14px !important;}
+    .calendar-shell{background:#fffdf7 !important;border-color:#fde68a !important;}
+    #semesterName,#semesterScheduleTitle,#semesterScheduleComments{display:none !important;}
+    #semesterHubSuggestions{max-height:none !important;overflow:visible !important;background:#fff !important;}
+    .semester-left h3:nth-of-type(1){background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:8px;margin-top:14px;}
+    .semester-left h3:nth-of-type(2){background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:8px;margin-top:14px;}
+    .semester-left .section-search-list{border-radius:14px !important;}
+    .cal-event{border-radius:10px !important;border-width:1px !important;}
+    @media(max-width:1100px){.builder-workspace{padding-right:0 !important}.required-side{position:static !important;width:100% !important;height:auto !important;transform:none !important}.right-tools{display:block}.required-bank{max-height:none !important}.required-toggle{display:none !important}.settings-grid{grid-template-columns:1fr !important}}
+
 </style>
 </head>
 <body>
@@ -2566,7 +2642,97 @@ function timeToMin(t) { const m=String(t||"").trim().match(/^(\d{1,2}):(\d{2})\s
 async function suggestHubCoursesForCurrentTerm() { /* Hub suggestions now use the Hub Elective Helper and /api/courses/hub. */ }
 
 
-window.addEventListener("load", setupBuilder);
+
+
+/* v19 behavior overrides */
+const CANONICAL_TERM_ORDER = ["Freshman Fall","Freshman Spring","Freshman Summer","Sophomore Fall","Sophomore Spring","Sophomore Summer","Junior Fall","Junior Spring","Junior Summer","Senior Fall","Senior Spring","Senior Summer"];
+function isCanonicalTermName(term){ return CANONICAL_TERM_ORDER.includes(term); }
+function removeTransferredTermV19(){
+  const box=document.querySelector('.term-box[data-term="Transferred Courses"]');
+  if(!box)return;
+  const pal=document.getElementById('coursePalette');
+  if(pal) box.querySelectorAll('.course-card').forEach(c=>pal.appendChild(c));
+  box.remove();
+}
+function sortTermBoxesV19(){
+  const grid=document.getElementById('termGrid'); if(!grid)return;
+  const boxes=[...grid.querySelectorAll('.term-box')];
+  const canonical=boxes.filter(b=>isCanonicalTermName(b.dataset.term)).sort((a,b)=>CANONICAL_TERM_ORDER.indexOf(a.dataset.term)-CANONICAL_TERM_ORDER.indexOf(b.dataset.term));
+  const custom=boxes.filter(b=>!isCanonicalTermName(b.dataset.term) && b.dataset.term!=="Transferred Courses");
+  [...canonical,...custom].forEach(b=>grid.appendChild(b));
+  decorateTermControlsV19();
+}
+function decorateTermControlsV19(){
+  document.querySelectorAll('#termGrid .term-box').forEach(box=>{
+    const canonical=isCanonicalTermName(box.dataset.term);
+    box.querySelectorAll('.term-title-actions button').forEach(btn=>{
+      if(btn.textContent.trim()==='↑'||btn.textContent.trim()==='↓') btn.style.display=canonical?'none':'';
+    });
+  });
+}
+function setupMajorCheckboxesV19(){
+  const sel=document.getElementById('scheduleMajor'); if(!sel || document.getElementById('majorCheckboxGrid'))return;
+  const grid=document.createElement('div'); grid.id='majorCheckboxGrid'; grid.className='major-checkbox-grid';
+  [...sel.options].forEach(opt=>{
+    const label=document.createElement('label');
+    label.innerHTML=`<input type="checkbox" value="${escapeHtml(opt.value)}" ${opt.selected?'checked':''}> <span>${escapeHtml(opt.textContent)}</span>`;
+    label.querySelector('input').addEventListener('change',()=>{ syncMajorSelectFromCheckboxesV19(); majorChanged(); saveLocalDegreeDraft(); });
+    grid.appendChild(label);
+  });
+  sel.insertAdjacentElement('afterend', grid);
+}
+function syncMajorSelectFromCheckboxesV19(){
+  const sel=document.getElementById('scheduleMajor'); const grid=document.getElementById('majorCheckboxGrid'); if(!sel||!grid)return;
+  const checked=[...grid.querySelectorAll('input:checked')].map(i=>i.value);
+  if(!checked.length){ const first=grid.querySelector('input'); if(first){ first.checked=true; checked.push(first.value); } }
+  [...sel.options].forEach(o=>o.selected=checked.includes(o.value));
+}
+function syncMajorCheckboxesFromSelectV19(){
+  const sel=document.getElementById('scheduleMajor'); const grid=document.getElementById('majorCheckboxGrid'); if(!sel||!grid)return;
+  const selected=[...sel.selectedOptions].map(o=>o.value);
+  grid.querySelectorAll('input').forEach(cb=>cb.checked=selected.includes(cb.value));
+}
+function restructureBuilderV19(){
+  const panel=document.getElementById('requiredPanel'); if(!panel)return;
+  if(!panel.querySelector('.right-tools')){
+    const tools=document.createElement('div'); tools.className='right-tools';
+    const sections=[...document.querySelectorAll('.schedule-side > section.compact-section')];
+    const add=sections.find(sec=>sec.querySelector('h2')?.textContent.trim()==='Add Course');
+    const palette=sections.find(sec=>sec.querySelector('h2')?.textContent.trim()==='Course Palette');
+    if(add) tools.appendChild(add);
+    if(palette) tools.appendChild(palette);
+    panel.insertBefore(tools, panel.querySelector('.required-bank'));
+  }
+  const hub=document.querySelector('.hub-check-panel'); const page=document.querySelector('.builder-page');
+  if(hub && page && !hub.classList.contains('bottom-hub-tracker')){ hub.classList.add('bottom-hub-tracker'); page.appendChild(hub); }
+  removeTransferredTermV19(); sortTermBoxesV19();
+}
+function applyV19Ui(){ setupMajorCheckboxesV19(); restructureBuilderV19(); setupAutoBackendSaveV19(); }
+const originalMoveTermBoxV19 = moveTermBox;
+moveTermBox = function(event, button, dir){
+  const box=button.closest('.term-box');
+  if(box && isCanonicalTermName(box.dataset.term)){ event.stopPropagation(); showToast('Built-in year terms stay automatically sorted. Custom terms can be moved.'); return; }
+  originalMoveTermBoxV19(event, button, dir); saveLocalDegreeDraft();
+};
+const originalAddTermBoxV19 = addTermBox;
+addTermBox = function(){ originalAddTermBoxV19(); sortTermBoxesV19(); };
+const originalEnsureTermBoxV19 = ensureTermBox;
+ensureTermBox = function(termName, special=false){ if(termName==='Transferred Courses') return; originalEnsureTermBoxV19(termName, special); sortTermBoxesV19(); };
+const originalRenderScheduleV19 = renderSchedule;
+renderSchedule = function(schedule){ originalRenderScheduleV19(schedule); syncMajorCheckboxesFromSelectV19(); removeTransferredTermV19(); sortTermBoxesV19(); restructureBuilderV19(); };
+const originalOpenHubModalV19 = openHubModal;
+openHubModal = function(event, button){ originalOpenHubModalV19(event, button); setTimeout(()=>document.getElementById('hubModal')?.querySelector('.modal')?.classList.add('flash-open'),0); };
+const originalSearchHubCourseDataV19 = searchHubCourseData;
+searchHubCourseData = async function(mode='main'){ await originalSearchHubCourseDataV19(mode); const box=document.getElementById(mode==='modal'?'modalHubResults':'hubCourseResults'); if(box) box.classList.add('flash-open'); };
+function setupAutoBackendSaveV19(){
+  if(window.__autoBackendSaveV19)return; window.__autoBackendSaveV19=true;
+  let timer=null;
+  const root=document.querySelector('.builder-page'); if(!root)return;
+  root.addEventListener('change',()=>{ clearTimeout(timer); timer=setTimeout(()=>{ saveLocalDegreeDraft(); },250); });
+  root.addEventListener('input',()=>{ clearTimeout(timer); timer=setTimeout(()=>{ saveLocalDegreeDraft(); },250); });
+}
+
+window.addEventListener("load", () => { setupBuilder(); applyV19Ui(); setTimeout(applyV19Ui, 250); });
 </script>
 """
 
@@ -3079,7 +3245,31 @@ async function loadSuggestedHubSections(code) {
 
 
 function escapeHtml(str) { return String(str || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
+
+
+/* v19 current-semester visual overrides */
+const COURSE_EVENT_COLORS_V19 = [
+  {bg:'#dbeafe', border:'#93c5fd'}, {bg:'#dcfce7', border:'#86efac'},
+  {bg:'#fef3c7', border:'#fcd34d'}, {bg:'#fce7f3', border:'#f9a8d4'},
+  {bg:'#ede9fe', border:'#c4b5fd'}, {bg:'#ffedd5', border:'#fdba74'},
+  {bg:'#ccfbf1', border:'#5eead4'}, {bg:'#e0e7ff', border:'#a5b4fc'}
+];
+function colorIndexForCourseV19(code){ let h=0; String(code||'').split('').forEach(ch=>h=(h*31+ch.charCodeAt(0))>>>0); return h % COURSE_EVENT_COLORS_V19.length; }
+const originalDrawSectionEventV19 = drawSectionEvent;
+drawSectionEvent = function(layer, sec, extraClass){
+  const before=layer.children.length;
+  originalDrawSectionEventV19(layer, sec, extraClass);
+  if(extraClass) return;
+  const colors=COURSE_EVENT_COLORS_V19[colorIndexForCourseV19(sec.course_code)];
+  [...layer.children].slice(before).forEach(ev=>{ ev.style.background=colors.bg; ev.style.borderColor=colors.border; });
+};
+function v19SemesterLoadDefaults(){
+  const name=document.getElementById('semesterName'); if(name && !name.value) name.value='Current Semester';
+  const title=document.getElementById('semesterScheduleTitle'); if(title && !title.value) title.value='Current Semester Schedule';
+}
+
 window.addEventListener("load", () => {
+  v19SemesterLoadDefaults();
   loadSemesterDraft();
   refreshDegreeTermPicker();
   renderSelectedSections();

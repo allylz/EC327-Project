@@ -1213,6 +1213,29 @@ BASE_HTML = r"""
       .required-toggle { display:none !important; }
     }
 
+
+    /* v11 edge-to-edge degree plan + cleaner Hub UI */
+    main { max-width:none !important; width:100% !important; padding:10px 10px 36px !important; }
+    .builder-page { width:100% !important; max-width:none !important; margin:0 !important; }
+    .builder-top, .compact-section, .required-bank { border-radius:12px !important; }
+    .builder-workspace { width:100% !important; grid-template-columns:minmax(0,1fr) minmax(420px,34vw) !important; }
+    .schedule-side { min-width:0 !important; }
+    .hub-check-panel { margin-top:10px; }
+    .hub-check-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:8px; }
+    .hub-option-panel { display:none; margin-top:10px; border:1px solid #dbe4f0; background:#f8fafc; border-radius:12px; padding:12px; }
+    .hub-option-panel.visible { display:block; }
+    .hub-tools-grid { display:grid; grid-template-columns:minmax(260px,1.2fr) minmax(260px,1fr); gap:12px; align-items:start; }
+    .hub-results { max-height:260px; overflow:auto; border:1px solid #dbe4f0; background:white; border-radius:10px; }
+    .hub-result { padding:9px; border-bottom:1px solid #eef2f7; cursor:pointer; }
+    .hub-result:hover { background:#eff6ff; }
+    .hub-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+    .hub-chip { font-size:11px; padding:3px 6px; border-radius:999px; border:1px solid #bfdbfe; background:#eff6ff; color:#1e3a8a; }
+    .hub-picker.compact { border-top:1px solid #edf1f7; padding-top:6px; display:grid; gap:6px; }
+    .hub-picker.compact .hub-summary { font-size:12px; color:#334155; line-height:1.25; }
+    .hub-picker.compact button { width:auto; justify-self:start; }
+    .course-actions .section-button { display:none !important; }
+    @media (max-width:1100px){ .hub-tools-grid{grid-template-columns:1fr;} .builder-workspace{grid-template-columns:1fr !important;} }
+
 </style>
 </head>
 <body>
@@ -1422,6 +1445,22 @@ BUILD_CONTENT = r"""
             <input id="manualCourseComment" placeholder="Optional comment">
           </div>
         </div>
+        <div id="hubOptionPanel" class="hub-option-panel">
+          <h3>Hub Elective Helper</h3>
+          <p class="muted">Pick a course from the Hub dataset, or manually choose the Hub units this placeholder will satisfy.</p>
+          <div class="hub-tools-grid">
+            <div>
+              <label>Search Hub course data</label>
+              <input id="hubCourseSearch" placeholder="Example: art, ethics, CASAH 225" oninput="searchHubCourseData()">
+              <div id="hubCourseResults" class="hub-results"><div class="muted" style="padding:8px;">Start typing to search Hub courses.</div></div>
+            </div>
+            <div>
+              <label>Manual Hub units for this Hub Elective</label>
+              <div id="manualHubUnits" class="hub-check-grid"></div>
+              <p class="muted">If you do not know the course yet, leave the card as “Hub Elective” and just select the units.</p>
+            </div>
+          </div>
+        </div>
         <div class="button-row">
           <button onclick="addManualCourse()">Add to Course Palette</button>
           <button class="secondary" onclick="searchCourses()">Search BU Course Data</button>
@@ -1457,12 +1496,14 @@ BUILD_CONTENT = r"""
   </div>
 </div>
 <div id="commentModal" class="modal-backdrop"><div class="modal"><div class="modal-header"><h2 id="commentModalTitle">Course Comments</h2><button class="secondary" onclick="closeModal('commentModal')">Close</button></div><textarea id="commentModalText" placeholder="Your comment for this course"></textarea><button onclick="saveModalComment()">Save Comment to This Card</button><h3>Other students' comments</h3><div id="otherStudentComments" class="scrollbox"></div></div></div>
-<div id="sectionModal" class="modal-backdrop"><div class="modal"><div class="modal-header"><h2 id="sectionModalTitle">Pick Sections</h2><button class="secondary" onclick="closeModal('sectionModal')">Close</button></div><p class="muted">Pick lecture/discussion/lab sections. Conflicts are disabled. Selected sections are stored on the course card.</p><div id="sectionList" class="section-list"></div><h3>Hub course suggestions</h3><button class="secondary" onclick="suggestHubCoursesForCurrentTerm()">Suggest 100-200 level Hub courses for missing units</button><div id="hubSuggestionList" class="section-list"></div></div></div>
+<div id="hubModal" class="modal-backdrop"><div class="modal"><div class="modal-header"><h2>Choose Hub Course / Units</h2><button class="secondary" onclick="closeModal('hubModal')">Close</button></div><p class="muted">Search the Hub data object from the backend, select a course, or manually assign Hub units.</p><div class="hub-tools-grid"><div><label>Search Hub course</label><input id="modalHubSearch" placeholder="Example: CASAH 225, art, ethical" oninput="searchHubCourseData('modal')"><div id="modalHubResults" class="hub-results"></div></div><div><label>Manual Hub units</label><div id="modalHubUnits" class="hub-check-grid"></div><button onclick="saveHubModalUnits()">Save Hub Units</button></div></div></div></div>
 """
 
 BUILD_SCRIPT = r"""
 <script>
 let nextCardId = 1;
+let HUB_DATA_CACHE = null;
+let ACTIVE_HUB_CARD = null;
 
 function setupHubChecklist(selectedUnits=null) {
   const box = document.getElementById("hubChecklist");
@@ -1515,6 +1556,8 @@ function setupBuilder() {
   ensureTermBox("Transferred Courses", true);
   ["Freshman Fall","Freshman Spring","Sophomore Fall","Sophomore Spring","Junior Fall","Junior Spring","Senior Fall","Senior Spring"].forEach(t => ensureTermBox(t));
   setupHubChecklist();
+  setupManualHubUnitControls("manualHubUnits");
+  setupManualHubUnitControls("modalHubUnits");
   majorChanged();
   restoreLocalDegreeDraft();
   bindDegreeDraftAutosave();
@@ -1597,7 +1640,19 @@ function requirementTypeChanged() {
   const type = document.getElementById("requirementType").value;
   const select = document.getElementById("electiveChoiceSelect");
   const hint = document.getElementById("electiveChoiceHint");
+  const hubPanel = document.getElementById("hubOptionPanel");
+  if (hubPanel) hubPanel.classList.toggle("visible", type === "Hub Elective");
+
   select.innerHTML = "";
+  if (type === "Hub Elective") {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "Use Hub helper below or keep as generic Hub Elective";
+    select.appendChild(opt);
+    hint.textContent = "Use the Hub helper to choose a Hub course from backend Hub data or manually select Hub units.";
+    return;
+  }
+
   const options = getCombinedDropdowns()[type] || [];
   if (!options.length) {
     const opt = document.createElement("option"); opt.value=""; opt.textContent="No approved list for this type"; select.appendChild(opt);
@@ -1826,7 +1881,6 @@ function makeCourseCard(course) {
     <div class="detail"><span class="comment-text">${escapeHtml(card.dataset.comments)}</span><br>Status: <span class="status-text">${escapeHtml(card.dataset.status)}</span>${choiceHtml}${hubHtml}</div>
     <div class="course-actions">
       <label class="completed-toggle" onclick="event.stopPropagation()"><input type="checkbox" ${card.dataset.transferred === "true" ? "checked" : ""} onchange="toggleTransferred(event, this)"> Transferred</label>
-      <button class="small section-button" onclick="openSectionPicker(event, this)">Sections</button>
       <button class="small comment-button" onclick="openCommentModal(event, this)">Comments</button>
       <button class="small success" onclick="markTransferred(event, this)">Transfer</button>
       <button class="small danger" onclick="removeCard(event, this)">Remove</button>
@@ -1838,7 +1892,125 @@ function makeHubPickerHtml(card) {
   const code = String(card.dataset.code || "");
   if (!code.includes("Hub Elective")) return "";
   let assigned = []; try { assigned = JSON.parse(card.dataset.hubUnits || "[]"); } catch {}
-  return `<div class="hub-picker"><b>Hub units fulfilled</b>${HUB_UNITS.map(unit => `<label onclick="event.stopPropagation()"><input type="checkbox" value="${escapeHtml(unit)}" ${assigned.includes(unit) ? "checked" : ""} onchange="hubCardChanged(event, this)"> ${escapeHtml(unit)}</label>`).join("")}</div>`;
+  const summary = assigned.length ? assigned.join(", ") : "No Hub units assigned yet";
+  return `<div class="hub-picker compact"><span class="hub-summary">${escapeHtml(summary)}</span><button class="small secondary" onclick="openHubModal(event, this)">Choose Hub</button></div>`;
+}
+
+function setupManualHubUnitControls(containerId, selectedUnits=[]) {
+  const box = document.getElementById(containerId);
+  if (!box) return;
+  const selected = new Set(selectedUnits || []);
+  box.innerHTML = HUB_UNITS.map(unit => `<label><input type="checkbox" value="${escapeHtml(unit)}" ${selected.has(unit) ? "checked" : ""}> ${escapeHtml(unit)}</label>`).join("");
+}
+
+function getManualHubUnits(containerId) {
+  const box = document.getElementById(containerId);
+  if (!box) return [];
+  return [...box.querySelectorAll("input:checked")].map(cb => cb.value);
+}
+
+async function getHubDataObject() {
+  if (HUB_DATA_CACHE) return HUB_DATA_CACHE;
+  const res = await api("GET", "/api/courses/hub");
+  HUB_DATA_CACHE = res.data || {};
+  return HUB_DATA_CACHE;
+}
+
+function hubCourseEntriesFromData(data) {
+  return Object.entries(data || {}).map(([code, info]) => ({
+    course_code: code,
+    course_title: info?.name || "",
+    hub_areas: info?.hub_areas || []
+  }));
+}
+
+function hubCourseMatches(entry, query, missing=[]) {
+  if (!entry.hub_areas || !entry.hub_areas.length) return false;
+  const q = String(query || "").toLowerCase().trim();
+  const text = `${entry.course_code} ${entry.course_title} ${entry.hub_areas.join(" ")}`.toLowerCase();
+  if (q && !text.includes(q)) return false;
+  if (missing.length && !entry.hub_areas.some(h => missing.includes(h))) return false;
+  return true;
+}
+
+function renderHubCourseResults(container, entries, onPick) {
+  if (!entries.length) {
+    container.innerHTML = `<div class="muted" style="padding:8px;">No matching Hub courses found.</div>`;
+    return;
+  }
+  container.innerHTML = entries.slice(0,80).map((c, idx) => `
+    <div class="hub-result" data-idx="${idx}">
+      <b>${escapeHtml(c.course_code)}</b> — ${escapeHtml(c.course_title)}
+      <div class="hub-chips">${(c.hub_areas || []).map(h => `<span class="hub-chip">${escapeHtml(h)}</span>`).join("")}</div>
+    </div>`).join("");
+  [...container.querySelectorAll(".hub-result")].forEach(el => {
+    el.onclick = () => onPick(entries[Number(el.dataset.idx)]);
+  });
+}
+
+async function searchHubCourseData(mode="add") {
+  const isModal = mode === "modal";
+  const input = document.getElementById(isModal ? "modalHubSearch" : "hubCourseSearch");
+  const container = document.getElementById(isModal ? "modalHubResults" : "hubCourseResults");
+  if (!input || !container) return;
+  container.innerHTML = `<div class="muted" style="padding:8px;">Searching Hub data...</div>`;
+  const data = await getHubDataObject();
+  const missing = getUnfulfilledHubUnits();
+  const entries = hubCourseEntriesFromData(data)
+    .filter(e => hubCourseMatches(e, input.value, missing.length ? missing : []))
+    .sort((a,b) => (b.hub_areas.length - a.hub_areas.length) || a.course_code.localeCompare(b.course_code));
+  renderHubCourseResults(container, entries, (course) => {
+    if (isModal) applyHubCourseToActiveCard(course);
+    else applyHubCourseToAddForm(course);
+  });
+}
+
+function applyHubCourseToAddForm(course) {
+  document.getElementById("manualCourseCode").value = `Hub Elective (${course.course_code})`;
+  document.getElementById("manualCourseComment").value = course.course_title || "";
+  setupManualHubUnitControls("manualHubUnits", course.hub_areas || []);
+  showToast(`Selected ${course.course_code} for Hub Elective.`);
+}
+
+function openHubModal(event, button) {
+  event.stopPropagation();
+  ACTIVE_HUB_CARD = button.closest(".course-card");
+  let units = []; try { units = JSON.parse(ACTIVE_HUB_CARD.dataset.hubUnits || "[]"); } catch {}
+  setupManualHubUnitControls("modalHubUnits", units);
+  const input = document.getElementById("modalHubSearch");
+  if (input) input.value = "";
+  document.getElementById("modalHubResults").innerHTML = `<div class="muted" style="padding:8px;">Search Hub courses or manually select units.</div>`;
+  document.getElementById("hubModal").classList.add("visible");
+}
+
+function applyHubCourseToActiveCard(course) {
+  if (!ACTIVE_HUB_CARD) return;
+  ACTIVE_HUB_CARD.dataset.code = `Hub Elective (${course.course_code})`;
+  ACTIVE_HUB_CARD.dataset.comments = course.course_title || "";
+  ACTIVE_HUB_CARD.dataset.hubUnits = JSON.stringify(course.hub_areas || []);
+  ACTIVE_HUB_CARD.querySelector(".code").textContent = ACTIVE_HUB_CARD.dataset.code;
+  const commentEl = ACTIVE_HUB_CARD.querySelector(".comment-text");
+  if (commentEl) commentEl.textContent = ACTIVE_HUB_CARD.dataset.comments;
+  refreshHubSummary(ACTIVE_HUB_CARD);
+  setupHubChecklist(getUnfulfilledHubUnits());
+  saveLocalDegreeDraft();
+  closeModal("hubModal");
+}
+
+function saveHubModalUnits() {
+  if (!ACTIVE_HUB_CARD) return;
+  const units = getManualHubUnits("modalHubUnits");
+  ACTIVE_HUB_CARD.dataset.hubUnits = JSON.stringify(units);
+  refreshHubSummary(ACTIVE_HUB_CARD);
+  setupHubChecklist(getUnfulfilledHubUnits());
+  saveLocalDegreeDraft();
+  closeModal("hubModal");
+}
+
+function refreshHubSummary(card) {
+  let units = []; try { units = JSON.parse(card.dataset.hubUnits || "[]"); } catch {}
+  const summary = card.querySelector(".hub-summary");
+  if (summary) summary.textContent = units.length ? units.join(", ") : "No Hub units assigned yet";
 }
 
 function hubCardChanged(event, checkbox) {
@@ -1846,6 +2018,7 @@ function hubCardChanged(event, checkbox) {
   const card = checkbox.closest(".course-card");
   const units = [...card.querySelectorAll(".hub-picker input:checked")].map(cb => cb.value);
   card.dataset.hubUnits = JSON.stringify(units);
+  refreshHubSummary(card);
   setupHubChecklist(getUnfulfilledHubUnits());
   saveLocalDegreeDraft();
 }
@@ -1867,11 +2040,13 @@ function addManualCourse() {
     course_code: code,
     comments,
     requirement_type: type,
-    selected_course_code: selectedCode
+    selected_course_code: selectedCode,
+    hub_units: type === "Hub Elective" ? getManualHubUnits("manualHubUnits") : []
   }));
 
   document.getElementById("manualCourseCode").value = "";
   document.getElementById("manualCourseComment").value = "";
+  setupManualHubUnitControls("manualHubUnits");
   document.getElementById("electiveChoiceSelect").value = "";
   saveLocalDegreeDraft();
 }
@@ -2081,7 +2256,8 @@ function sectionSlim(sec) { return { class_nbr: sec.class_nbr, section: sec.sect
 function sectionsOverlap(a,b) { const daysA=expandDays(a.days||""), daysB=expandDays(b.days||""); if (![...daysA].some(d=>daysB.has(d))) return false; const a1=timeToMin(a.start),a2=timeToMin(a.end),b1=timeToMin(b.start),b2=timeToMin(b.end); if ([a1,a2,b1,b2].some(x=>x===null)) return false; return a1 < b2 && b1 < a2; }
 function expandDays(days) { const s=String(days||""); const out=new Set(); [["Mo","Mo"],["Tu","Tu"],["We","We"],["Th","Th"],["Fr","Fr"],["Sa","Sa"],["Su","Su"]].forEach(([t,v])=>{ if(s.includes(t)) out.add(v); }); return out; }
 function timeToMin(t) { const m=String(t||"").trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i); if(!m)return null; let h=Number(m[1]),min=Number(m[2]); const ap=m[3].toLowerCase(); if(ap==="pm"&&h!==12)h+=12; if(ap==="am"&&h===12)h=0; return h*60+min; }
-async function suggestHubCoursesForCurrentTerm() { const target=document.getElementById("hubSuggestionList"); target.innerHTML=`<div class="muted">Searching...</div>`; const missing=getUnfulfilledHubUnits(); const found=[]; for (const unit of missing.slice(0,4)) { const res=await api("GET","/api/courses?hub="+encodeURIComponent(unit)); const courses=res.data?.results||[]; courses.forEach(c=>{ const code=c.course_code||""; const num=Number((code.match(/(\d{3})/)||[])[1]); const hubs=c.hub?.hub_areas||[]; if(num>=100&&num<=299&&hubs.length>=2&&!found.some(x=>x.course_code===code)) found.push(c); }); } if(!found.length){target.innerHTML=`<div class="muted">No 100-200 level multi-Hub suggestions found from current data.</div>`;return;} target.innerHTML=found.slice(0,16).map(c=>`<div class="section-option"><b>${escapeHtml(c.course_code)}</b><div class="section-meta">${escapeHtml(c.course_title||c.hub?.name||"")}<br>${escapeHtml((c.hub?.hub_areas||[]).join(", "))}<br>${escapeHtml(c.days||"")} ${escapeHtml(c.start||"")} - ${escapeHtml(c.end||"")}</div></div>`).join(""); }
+async function suggestHubCoursesForCurrentTerm() { /* Hub suggestions now use the Hub Elective Helper and /api/courses/hub. */ }
+
 
 window.addEventListener("load", setupBuilder);
 </script>
@@ -2279,28 +2455,37 @@ function expandDays(days) { const s=String(days||""); const out=[]; [["Mo","Mo"]
 function timeToMin(t) { const m=String(t||"").trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i); if(!m)return null; let h=Number(m[1]),min=Number(m[2]); const ap=m[3].toLowerCase(); if(ap==="pm"&&h!==12)h+=12; if(ap==="am"&&h===12)h=0; return h*60+min; }
 function sectionsOverlap(a,b) { const daysA=expandDays(a.days||""), daysB=expandDays(b.days||""); if (!daysA.some(d=>daysB.includes(d))) return false; const a1=timeToMin(a.start),a2=timeToMin(a.end),b1=timeToMin(b.start),b2=timeToMin(b.end); if([a1,a2,b1,b2].some(x=>x===null))return false; return a1 < b2 && b1 < a2; }
 
+async function getHubDataObjectForSemester() {
+  if (window.HUB_DATA_CACHE) return window.HUB_DATA_CACHE;
+  const res = await api("GET", "/api/courses/hub");
+  window.HUB_DATA_CACHE = res.data || {};
+  return window.HUB_DATA_CACHE;
+}
+function hubEntriesForSemester(data) {
+  return Object.entries(data || {}).map(([code, info]) => ({ course_code: code, course_title: info?.name || "", hub_areas: info?.hub_areas || [] }));
+}
 async function suggestSemesterHubCourses() {
   const box = document.getElementById("semesterHubSuggestions");
-  box.innerHTML = `<div class="muted">Searching Hub suggestions...</div>`;
+  box.innerHTML = `<div class="muted">Searching Hub data...</div>`;
   let missing = [];
   try { const draft = JSON.parse(localStorage.getItem("degreeScheduleDraft") || "{}"); missing = draft.hub_unfulfilled || []; } catch {}
   if (!missing.length) missing = HUB_UNITS;
-  const found = [];
-  for (const unit of missing.slice(0,5)) {
-    const res = await api("GET", "/api/courses?hub=" + encodeURIComponent(unit));
-    const courses = res.data?.results || [];
-    for (const c of courses) {
-      const code = c.course_code || "";
-      const num = Number((code.match(/(\d{3})/) || [])[1]);
-      const hubs = c.hub?.hub_areas || [];
-      const slim = slimSection(c);
-      if (num >= 100 && num <= 299 && hubs.length >= 2 && !found.some(x => x.course_code === code) && !SELECTED_SECTIONS.some(s => sectionsOverlap(s, slim))) found.push(c);
-    }
-  }
-  if (!found.length) { box.innerHTML = `<div class="muted">No non-conflicting 100–200 level multi-Hub suggestions found.</div>`; return; }
-  renderSemesterSectionResults(found.slice(0,80));
-  box.innerHTML = found.slice(0,18).map(c => `<div class="section-chip"><b>${escapeHtml(c.course_code)}</b><div class="section-meta">${escapeHtml(c.course_title || c.hub?.name || "")}<br>${escapeHtml((c.hub?.hub_areas || []).join(", "))}<br>${escapeHtml(c.days || "")} ${escapeHtml(c.start || "")} - ${escapeHtml(c.end || "")}</div></div>`).join("");
+  const data = await getHubDataObjectForSemester();
+  const found = hubEntriesForSemester(data)
+    .filter(c => (c.hub_areas || []).some(h => missing.includes(h)))
+    .filter(c => {
+      const num = Number((String(c.course_code).match(/(\d{3})/) || [])[1]);
+      return num >= 100 && num <= 299 && (c.hub_areas || []).length >= 2;
+    })
+    .sort((a,b) => (b.hub_areas.length - a.hub_areas.length) || a.course_code.localeCompare(b.course_code));
+  if (!found.length) { box.innerHTML = `<div class="muted">No 100–200 level multi-Hub suggestions found in Hub data.</div>`; return; }
+  box.innerHTML = found.slice(0,24).map(c => `<div class="section-chip" onclick="loadSuggestedHubSections('${c.course_code.replace(/'/g,"\\'")}')"><b>${escapeHtml(c.course_code)}</b><div class="section-meta">${escapeHtml(c.course_title)}<br>${escapeHtml((c.hub_areas || []).join(", "))}<br><span class="muted">Click to load available sections.</span></div></div>`).join("");
 }
+async function loadSuggestedHubSections(code) {
+  document.getElementById("semesterCourseQuery").value = code;
+  await searchSemesterCourses();
+}
+
 
 function escapeHtml(str) { return String(str || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
 window.addEventListener("load", () => { loadSemesterDraft(); renderSelectedSections(); renderCalendar(); window.addEventListener("resize", renderCalendar); });

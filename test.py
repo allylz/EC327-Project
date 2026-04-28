@@ -1375,15 +1375,15 @@ function showResponse(data, boxId="responseBox") {
   else showToast(typeof data === "string" ? data : "Done.");
 }
 
-async function api(method, path, body=null) {
+async function api(method, path, body=null, options={}) {
   const opts = { method, headers: {"Content-Type": "application/json"}, credentials: "same-origin" };
   if (body !== null) opts.body = JSON.stringify(body);
   const res = await fetch("/proxy" + path, opts);
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); } catch { data = text; }
-  showToast(summarizeApiResult(res.status, data));
-  await updateHeaderAuth();
+  if (!options.silent) showToast(summarizeApiResult(res.status, data));
+  if (!options.skipAuthRefresh) await updateHeaderAuth();
   return {status: res.status, data};
 }
 
@@ -1630,8 +1630,8 @@ function setupBuilder() {
   setupManualHubUnitControls("manualHubUnits");
   setupManualHubUnitControls("modalHubUnits");
   majorChanged();
-  restoreLocalDegreeDraft();
   bindDegreeDraftAutosave();
+  autoLoadDegreeScheduleFromCacheOrServer();
 }
 
 function getSelectedMajors() {
@@ -2387,17 +2387,67 @@ function saveLocalDegreeDraft() {
   } catch (err) { console.warn("Could not save local degree draft", err); }
 }
 
-function restoreLocalDegreeDraft() {
+function getLocalDegreeDraftMeta() {
   try {
     const raw = localStorage.getItem("degreeScheduleDraft");
-    if (!raw) return;
-    const draft = JSON.parse(raw);
-    if (!draft || !draft.terms) return;
-    if (confirm("Restore your unsaved local degree-plan draft from this browser?")) {
-      renderSchedule(draft);
-      showToast("Restored local draft.");
+    const savedAt = localStorage.getItem("degreeScheduleDraftSavedAt");
+    const pulledAt = localStorage.getItem("degreeSchedulePulledAt");
+    const serverUpdatedAt = localStorage.getItem("degreeScheduleServerUpdatedAt");
+    const draft = raw ? JSON.parse(raw) : null;
+    return { draft, savedAt, pulledAt, serverUpdatedAt };
+  } catch (err) {
+    console.warn("Could not read local degree draft metadata", err);
+    return { draft: null, savedAt: null, pulledAt: null, serverUpdatedAt: null };
+  }
+}
+
+function restoreLocalDegreeDraftSilently() {
+  const { draft } = getLocalDegreeDraftMeta();
+  if (draft && draft.terms) {
+    renderSchedule(draft);
+    showToast("Loaded local degree-plan draft.");
+    return true;
+  }
+  return false;
+}
+
+async function autoLoadDegreeScheduleFromCacheOrServer() {
+  const meta = getLocalDegreeDraftMeta();
+  const hasLocal = !!(meta.draft && meta.draft.terms);
+  const localSavedAt = meta.savedAt ? Date.parse(meta.savedAt) : 0;
+  const pulledAt = meta.pulledAt ? Date.parse(meta.pulledAt) : 0;
+  const now = Date.now();
+  const maxServerAgeMs = 5 * 60 * 1000;
+
+  if (hasLocal && localSavedAt > pulledAt) {
+    renderSchedule(meta.draft);
+    showToast("Restored your unsaved local degree-plan draft.");
+    return;
+  }
+
+  if (hasLocal && pulledAt && now - pulledAt < maxServerAgeMs) {
+    renderSchedule(meta.draft);
+    showToast("Loaded cached degree plan.");
+    return;
+  }
+
+  try {
+    const result = await api("GET", "/api/my-schedule", null, { silent: true });
+    const schedule = result.data?.schedule || result.data?.data?.schedule;
+    if (schedule) {
+      renderSchedule(schedule);
+      localStorage.setItem("degreeScheduleDraft", JSON.stringify(schedule));
+      localStorage.setItem("degreeScheduleDraftSavedAt", new Date().toISOString());
+      localStorage.setItem("degreeSchedulePulledAt", new Date().toISOString());
+      if (schedule.updatedAt) localStorage.setItem("degreeScheduleServerUpdatedAt", schedule.updatedAt);
+      showToast("Pulled latest degree plan from server.");
+      return;
     }
-  } catch (err) { console.warn("Could not restore local degree draft", err); }
+  } catch (err) {
+    console.warn("Could not auto-pull degree schedule", err);
+  }
+
+  if (!restoreLocalDegreeDraftSilently()) saveLocalDegreeDraft();
 }
 
 function bindDegreeDraftAutosave() {
@@ -2415,8 +2465,16 @@ function previewSchedule() {
 async function saveSchedule() {
   const schedule = buildScheduleJson();
   if (!schedule.title) { alert("Title required."); return; }
-  await api("POST", "/api/schedules", schedule);
-  saveLocalDegreeDraft();
+  const result = await api("POST", "/api/schedules", schedule);
+  const saved = result.data?.schedule || result.data?.data?.schedule || result.data;
+  if (saved && saved.terms) {
+    localStorage.setItem("degreeScheduleDraft", JSON.stringify(saved));
+    localStorage.setItem("degreeScheduleDraftSavedAt", new Date().toISOString());
+    localStorage.setItem("degreeSchedulePulledAt", new Date().toISOString());
+    if (saved.updatedAt) localStorage.setItem("degreeScheduleServerUpdatedAt", saved.updatedAt);
+  } else {
+    saveLocalDegreeDraft();
+  }
 }
 
 async function loadMySchedule() {
@@ -2424,6 +2482,10 @@ async function loadMySchedule() {
   const schedule = result.data?.schedule || result.data?.data?.schedule;
   if (!schedule) { alert("No saved schedule found."); return; }
   renderSchedule(schedule);
+  localStorage.setItem("degreeScheduleDraft", JSON.stringify(schedule));
+  localStorage.setItem("degreeScheduleDraftSavedAt", new Date().toISOString());
+  localStorage.setItem("degreeSchedulePulledAt", new Date().toISOString());
+  if (schedule.updatedAt) localStorage.setItem("degreeScheduleServerUpdatedAt", schedule.updatedAt);
 }
 
 function renderSchedule(schedule) {
@@ -2594,16 +2656,56 @@ function clearSemesterDraft() {
   showToast("Local current-semester draft cleared.");
 }
 
+function extractActualCourseCode(code) {
+  const paren = String(code || "").match(/\(([^)]+)\)/);
+  return (paren ? paren[1] : code || "").trim();
+}
+
+function normalizeCourseQueryForSearch(q) {
+  return String(q || "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function courseQueryVariants(q) {
+  const base = normalizeCourseQueryForSearch(extractActualCourseCode(q));
+  const variants = new Set([q, base]);
+  const compactLetters = base.replace(/^([A-Z]+)\s+([A-Z]+)\s+(\d{3}[A-Z]?)$/, "$1$2 $3");
+  variants.add(compactLetters);
+
+  const m = base.match(/^([A-Z]{2,8})\s*(\d{3}[A-Z]?)$/);
+  if (m) {
+    variants.add(`${m[1]} ${m[2]}`);
+    variants.add(`${m[1]}${m[2]}`);
+    if (m[1].startsWith("CAS") && m[1].length > 3) variants.add(`CAS ${m[1].slice(3)} ${m[2]}`);
+    if (m[1].startsWith("ENG") && m[1].length > 3) variants.add(`ENG ${m[1].slice(3)} ${m[2]}`);
+  }
+
+  const spaced = base.match(/^([A-Z]{2,4})\s+([A-Z]{1,4})\s+(\d{3}[A-Z]?)$/);
+  if (spaced) {
+    variants.add(`${spaced[1]}${spaced[2]} ${spaced[3]}`);
+    variants.add(`${spaced[1]} ${spaced[2]} ${spaced[3]}`);
+  }
+  return [...variants].filter(Boolean);
+}
+
+async function fetchSectionsLenient(q) {
+  const variants = courseQueryVariants(q);
+  for (const v of variants) {
+    const res = await api("GET", "/api/courses/" + encodeURIComponent(v), null, { silent: true, skipAuthRefresh: true });
+    if (res.data?.sections?.length) return res.data.sections;
+  }
+  for (const v of variants) {
+    const res = await api("GET", "/api/courses?q=" + encodeURIComponent(v), null, { silent: true, skipAuthRefresh: true });
+    if (res.data?.results?.length) return res.data.results;
+  }
+  return [];
+}
+
 async function searchSemesterCourses() {
   const q = document.getElementById("semesterCourseQuery").value.trim();
   const box = document.getElementById("semesterSectionResults");
   if (!q) { box.innerHTML = `<div class="muted">Enter a course or keyword.</div>`; return; }
   box.innerHTML = `<div class="muted">Searching...</div>`;
-  const exactCourseLike = /^[A-Za-z]{2,4}\s*[A-Za-z]{0,3}\s*\d{3}/.test(q);
-  const res = exactCourseLike ? await api("GET", "/api/courses/" + encodeURIComponent(q)) : await api("GET", "/api/courses?q=" + encodeURIComponent(q));
-  let sections = [];
-  if (res.data?.sections) sections = res.data.sections;
-  else if (res.data?.results) sections = res.data.results;
+  const sections = await fetchSectionsLenient(q);
   renderSemesterSectionResults(sections || []);
 }
 
@@ -2701,6 +2803,8 @@ function removeSelectedSection(uid) {
 
 function renderCalendar() {
   const grid = document.getElementById("calendarGrid");
+  if (!grid) return;
+  if (grid.clientWidth === 0) { requestAnimationFrame(renderCalendar); return; }
   grid.innerHTML = "";
   grid.appendChild(cell("", "cal-head"));
   DAYS.forEach(d => grid.appendChild(cell(d, "cal-head")));
@@ -2980,6 +3084,8 @@ window.addEventListener("load", () => {
   refreshDegreeTermPicker();
   renderSelectedSections();
   renderCalendar();
+  requestAnimationFrame(() => { renderSelectedSections(); renderCalendar(); });
+  setTimeout(() => { renderSelectedSections(); renderCalendar(); }, 150);
   window.addEventListener("resize", renderCalendar);
 });
 </script>

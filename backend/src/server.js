@@ -203,37 +203,55 @@ function validateScheduleTerms(terms) {
 }
 
 function enrichSchedule(schedule) {
-  if (!schedule || !schedule.terms) return schedule;
+  if (!schedule || !schedule.terms) {
+    return schedule;
+  }
 
   const enrichedTerms = {};
 
   for (const [termName, courses] of Object.entries(schedule.terms)) {
+    if (!Array.isArray(courses)) {
+      enrichedTerms[termName] = [];
+      continue;
+    }
+
     enrichedTerms[termName] = courses.map((plannedCourse) => {
-      const code = normalizeCourseCode(plannedCourse.course_code);
+      const rawCode = plannedCourse.course_code || "";
+      const code = normalizeCourseCode(rawCode);
 
-      const matchingSection = courseSections.find(
-        (section) => normalizeCourseCode(section.course_code) === code
-      );
+      // Do not try to normalize special placeholders like "Hub Elective"
+      const isPlaceholder =
+        code.includes("ELECTIVE") ||
+        code.includes("TRANSFERRED") ||
+        code.includes("REQUIRED");
 
-      const hub = hubCourses[code] || null;
+      const matchingSection = isPlaceholder
+        ? null
+        : courseSections.find(
+            (section) => normalizeCourseCode(section.course_code) === code
+          );
+
+      const hub = isPlaceholder ? null : hubCourses[code] || null;
 
       return {
-          ...schedule,
-            terms: enrichedTerms,
         ...plannedCourse,
-        course_code: code,
+        course_code: plannedCourse.course_code || code,
         course_title:
+          plannedCourse.course_title ||
           matchingSection?.course_title ||
           hub?.name ||
-          plannedCourse.course_title ||
           null,
-        hub_areas: hub?.hub_areas || [],
+        hub_areas: plannedCourse.hub_areas || hub?.hub_areas || [],
       };
     });
   }
 
   return {
     ...schedule,
+    major: schedule.major || null,
+    hub_unfulfilled: Array.isArray(schedule.hub_unfulfilled)
+      ? schedule.hub_unfulfilled
+      : [],
     terms: enrichedTerms,
   };
 }

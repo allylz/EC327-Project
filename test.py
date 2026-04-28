@@ -1077,6 +1077,142 @@ BASE_HTML = r"""
     .hub-picker { border-top:1px solid #edf1f7; padding-top:6px; display:grid; gap:3px; }
     .hub-picker label { font-size:12px; display:flex; gap:5px; align-items:center; }
     @media (max-width:1000px){ .builder-workspace{grid-template-columns:1fr;} .required-side{position:relative;height:auto;} }
+
+
+    /* v10 required panel + current-semester calendar builder */
+    :root { --header-h: 72px; }
+    .builder-workspace {
+      grid-template-columns: minmax(0, 1fr) minmax(430px, 38vw) !important;
+      gap: 18px !important;
+      align-items: start !important;
+    }
+    .required-side {
+      position: sticky !important;
+      top: calc(var(--header-h) + 14px) !important;
+      height: calc(100vh - var(--header-h) - 28px) !important;
+      width: auto !important;
+      max-width: none !important;
+      overflow: visible !important;
+      z-index: 20 !important;
+    }
+    .required-bank {
+      height: 100% !important;
+      max-height: none !important;
+      overflow: auto !important;
+      padding: 14px !important;
+    }
+    .required-side.collapsed { transform: translateX(calc(100% - 42px)) !important; }
+    .required-toggle { top: 14px !important; }
+    .required-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 8px;
+      align-items: start;
+      margin-bottom: 14px;
+    }
+    .required-group-title {
+      grid-column: 1 / -1;
+      position: sticky;
+      top: 0;
+      background: rgba(255,255,255,.95);
+      backdrop-filter: blur(6px);
+      padding: 6px 0;
+      z-index: 1;
+    }
+    .required-bank .course-card {
+      width: 100% !important;
+      max-width: none !important;
+      min-height: 96px;
+      margin: 0 !important;
+    }
+    .term-box {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 10px !important;
+      align-content: flex-start !important;
+    }
+    .term-title { flex: 0 0 100% !important; }
+    .course-card {
+      flex: 0 0 245px !important;
+      width: 245px !important;
+      max-width: 245px !important;
+    }
+    .semester-page {
+      display: grid;
+      grid-template-columns: minmax(320px, 430px) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .semester-left {
+      position: sticky;
+      top: calc(var(--header-h) + 14px);
+      max-height: calc(100vh - var(--header-h) - 28px);
+      overflow: auto;
+    }
+    .section-search-list, .selected-section-list {
+      display: grid;
+      gap: 8px;
+      max-height: 330px;
+      overflow: auto;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+    .section-chip {
+      border: 1px solid #dbe4f0;
+      border-radius: 12px;
+      padding: 10px;
+      background: #fff;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(15,23,42,.04);
+    }
+    .section-chip:hover { border-color: #2563eb; background: #eff6ff; }
+    .section-chip.conflict { border-color: #ef4444; background: #fff1f2; cursor: not-allowed; opacity:.8; }
+    .section-chip.selected { border-color:#059669; background:#ecfdf5; }
+    .calendar-shell { background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px; box-shadow:var(--shadow); overflow:auto; }
+    .calendar-grid {
+      position: relative;
+      display: grid;
+      grid-template-columns: 64px repeat(5, minmax(150px, 1fr));
+      min-width: 900px;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .cal-head, .cal-time, .cal-cell {
+      border-right: 1px solid #e5e7eb;
+      border-bottom: 1px solid #e5e7eb;
+      min-height: 42px;
+      padding: 6px;
+      font-size: 12px;
+    }
+    .cal-head { background:#f8fafc; font-weight:900; text-align:center; position:sticky; top:0; z-index:2; }
+    .cal-time { background:#f8fafc; color:#64748b; font-weight:700; }
+    .cal-cell { background:#fff; }
+    .cal-event {
+      border-radius: 10px;
+      padding: 7px;
+      font-size: 12px;
+      background:#dbeafe;
+      border:1px solid #93c5fd;
+      color:#0f172a;
+      overflow:hidden;
+      box-shadow: 0 4px 12px rgba(15,23,42,.10);
+    }
+    .cal-event.preview { background:#fef3c7; border-color:#f59e0b; }
+    .cal-event.conflict { background:#fee2e2; border-color:#ef4444; }
+    .calendar-events-layer { position:absolute; inset:0; pointer-events:none; }
+    .semester-controls-slim { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .semester-controls-slim button { width:auto; }
+    @media (max-width: 1100px) {
+      .builder-workspace, .semester-page { grid-template-columns: 1fr !important; }
+      .required-side, .semester-left { position: static !important; height:auto !important; max-height:none !important; }
+      .required-side.collapsed { transform:none !important; }
+      .required-toggle { display:none !important; }
+    }
+
 </style>
 </head>
 <body>
@@ -1088,7 +1224,8 @@ BASE_HTML = r"""
     </div>
     <nav>
       <span class="hello-pill" id="helloUser">Hello, guest</span>
-      <a href="/build">Build My Schedule</a>
+      <a href="/build">Degree Plan</a>
+      <a href="/semester">Current Semester</a>
       <a href="/schedules">View Schedules</a>
       <a href="/login" id="loginRegisterLink">Login / Register</a>
       <button id="navLogoutBtn" onclick="logoutFromNav()" style="display:none;">Logout</button>
@@ -1355,6 +1492,8 @@ function toggleRequiredPanel() {
 }
 
 function setupBuilder() {
+  // Restore local draft first if present, then users can choose to load saved backend plan.
+
   const majorSelect = document.getElementById("scheduleMajor");
   majorSelect.innerHTML = "";
   Object.keys(MAJOR_DATA).forEach((major, idx) => {
@@ -1377,6 +1516,8 @@ function setupBuilder() {
   ["Freshman Fall","Freshman Spring","Sophomore Fall","Sophomore Spring","Junior Fall","Junior Spring","Senior Fall","Senior Spring"].forEach(t => ensureTermBox(t));
   setupHubChecklist();
   majorChanged();
+  restoreLocalDegreeDraft();
+  bindDegreeDraftAutosave();
 }
 
 function getSelectedMajors() {
@@ -1520,6 +1661,7 @@ function removeTermBox(event, button) {
   document.getElementById("coursePalette").append(...box.querySelectorAll(".course-card"));
   box.remove();
   loadRequiredPlan();
+  saveLocalDegreeDraft();
 }
 
 function addTermBox() {
@@ -1527,6 +1669,7 @@ function addTermBox() {
   const label = custom || document.getElementById("newTermLabel").value;
   ensureTermBox(label);
   document.getElementById("newTermCustom").value = "";
+  saveLocalDegreeDraft();
 }
 
 function loadRequiredPlan() {
@@ -1704,6 +1847,7 @@ function hubCardChanged(event, checkbox) {
   const units = [...card.querySelectorAll(".hub-picker input:checked")].map(cb => cb.value);
   card.dataset.hubUnits = JSON.stringify(units);
   setupHubChecklist(getUnfulfilledHubUnits());
+  saveLocalDegreeDraft();
 }
 
 function addManualCourse() {
@@ -1729,6 +1873,7 @@ function addManualCourse() {
   document.getElementById("manualCourseCode").value = "";
   document.getElementById("manualCourseComment").value = "";
   document.getElementById("electiveChoiceSelect").value = "";
+  saveLocalDegreeDraft();
 }
 
 function setCardTransferred(card, transferred) {
@@ -1744,6 +1889,7 @@ function toggleTransferred(event, checkbox) {
   const card = checkbox.closest(".course-card");
   setCardTransferred(card, checkbox.checked);
   loadRequiredPlan();
+  saveLocalDegreeDraft();
 }
 
 function markTransferred(event, button) {
@@ -1761,6 +1907,7 @@ function removeCard(event, button) {
   event.stopPropagation();
   button.closest(".course-card").remove();
   loadRequiredPlan();
+  saveLocalDegreeDraft();
 }
 
 function dragCourse(event) {
@@ -1778,6 +1925,7 @@ function dropCourse(event) {
   if (card) {
     event.currentTarget.appendChild(card);
     loadRequiredPlan();
+    saveLocalDegreeDraft();
   }
 }
 
@@ -1810,6 +1958,35 @@ function buildScheduleJson() {
   return { title, major, majors, comments, hub_unfulfilled: getUnfulfilledHubUnits(), terms };
 }
 
+
+function saveLocalDegreeDraft() {
+  try {
+    if (!document.getElementById("termGrid")) return;
+    localStorage.setItem("degreeScheduleDraft", JSON.stringify(buildScheduleJson()));
+    localStorage.setItem("degreeScheduleDraftSavedAt", new Date().toISOString());
+  } catch (err) { console.warn("Could not save local degree draft", err); }
+}
+
+function restoreLocalDegreeDraft() {
+  try {
+    const raw = localStorage.getItem("degreeScheduleDraft");
+    if (!raw) return;
+    const draft = JSON.parse(raw);
+    if (!draft || !draft.terms) return;
+    if (confirm("Restore your unsaved local degree-plan draft from this browser?")) {
+      renderSchedule(draft);
+      showToast("Restored local draft.");
+    }
+  } catch (err) { console.warn("Could not restore local degree draft", err); }
+}
+
+function bindDegreeDraftAutosave() {
+  const root = document.querySelector(".builder-page");
+  if (!root) return;
+  root.addEventListener("input", () => setTimeout(saveLocalDegreeDraft, 80));
+  root.addEventListener("change", () => setTimeout(saveLocalDegreeDraft, 80));
+}
+
 function previewSchedule() {
   navigator.clipboard?.writeText(JSON.stringify(buildScheduleJson(), null, 2));
   showToast("Schedule JSON copied to clipboard.");
@@ -1819,6 +1996,7 @@ async function saveSchedule() {
   const schedule = buildScheduleJson();
   if (!schedule.title) { alert("Title required."); return; }
   await api("POST", "/api/schedules", schedule);
+  saveLocalDegreeDraft();
 }
 
 async function loadMySchedule() {
@@ -1847,6 +2025,7 @@ function renderSchedule(schedule) {
     courses.forEach(c => box.appendChild(makeCourseCard(c)));
   });
   loadRequiredPlan();
+  saveLocalDegreeDraft();
 }
 
 async function searchCourses() {
@@ -1905,6 +2084,226 @@ function timeToMin(t) { const m=String(t||"").trim().match(/^(\d{1,2}):(\d{2})\s
 async function suggestHubCoursesForCurrentTerm() { const target=document.getElementById("hubSuggestionList"); target.innerHTML=`<div class="muted">Searching...</div>`; const missing=getUnfulfilledHubUnits(); const found=[]; for (const unit of missing.slice(0,4)) { const res=await api("GET","/api/courses?hub="+encodeURIComponent(unit)); const courses=res.data?.results||[]; courses.forEach(c=>{ const code=c.course_code||""; const num=Number((code.match(/(\d{3})/)||[])[1]); const hubs=c.hub?.hub_areas||[]; if(num>=100&&num<=299&&hubs.length>=2&&!found.some(x=>x.course_code===code)) found.push(c); }); } if(!found.length){target.innerHTML=`<div class="muted">No 100-200 level multi-Hub suggestions found from current data.</div>`;return;} target.innerHTML=found.slice(0,16).map(c=>`<div class="section-option"><b>${escapeHtml(c.course_code)}</b><div class="section-meta">${escapeHtml(c.course_title||c.hub?.name||"")}<br>${escapeHtml((c.hub?.hub_areas||[]).join(", "))}<br>${escapeHtml(c.days||"")} ${escapeHtml(c.start||"")} - ${escapeHtml(c.end||"")}</div></div>`).join(""); }
 
 window.addEventListener("load", setupBuilder);
+</script>
+"""
+
+
+SEMESTER_CONTENT = r"""
+<div class="semester-page">
+  <section class="semester-left">
+    <h2>Current Semester Builder</h2>
+    <p class="muted">Search for a course, choose exact sections, and build a weekly calendar. This saves locally in your browser immediately, so reloads do not erase your work.</p>
+    <div class="semester-controls-slim">
+      <input id="semesterName" placeholder="Example: Fall 2026" value="Current Semester" oninput="saveSemesterDraft()">
+      <button class="secondary" onclick="clearSemesterDraft()">Clear Local Draft</button>
+    </div>
+    <h3>Search course sections</h3>
+    <input id="semesterCourseQuery" placeholder="Example: CAS PY 212 or software" onkeydown="if(event.key==='Enter') searchSemesterCourses()">
+    <button onclick="searchSemesterCourses()">Search Sections</button>
+    <div id="semesterSectionResults" class="section-search-list"><div class="muted">Search results will appear here.</div></div>
+    <h3>Selected Sections</h3>
+    <div id="selectedSections" class="selected-section-list"><div class="muted">No sections selected yet.</div></div>
+    <h3>Hub Suggestions</h3>
+    <p class="muted">Suggests 100–200 level Hub courses that satisfy multiple missing Hub units and do not conflict with your selected sections.</p>
+    <button class="secondary" onclick="suggestSemesterHubCourses()">Suggest Hub Courses</button>
+    <div id="semesterHubSuggestions" class="section-search-list"><div class="muted">Suggestions will appear here.</div></div>
+  </section>
+  <section class="calendar-shell">
+    <h2>Weekly Calendar</h2>
+    <div id="calendarGrid" class="calendar-grid"></div>
+  </section>
+</div>
+"""
+
+SEMESTER_SCRIPT = r"""
+<script>
+let SELECTED_SECTIONS = [];
+let PREVIEW_SECTION = null;
+const DAYS = ["Mo", "Tu", "We", "Th", "Fr"];
+const START_HOUR = 8;
+const END_HOUR = 22;
+
+function semesterStorageKey() { return "currentSemesterSectionDraft"; }
+
+function sectionUid(sec) {
+  return [sec.course_code, sec.class_nbr, sec.section, sec.display_title].filter(Boolean).join("|");
+}
+
+function loadSemesterDraft() {
+  try {
+    const raw = localStorage.getItem(semesterStorageKey());
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    document.getElementById("semesterName").value = data.semesterName || "Current Semester";
+    SELECTED_SECTIONS = Array.isArray(data.sections) ? data.sections : [];
+  } catch (err) { console.warn(err); }
+}
+
+function saveSemesterDraft() {
+  const data = {
+    semesterName: document.getElementById("semesterName")?.value || "Current Semester",
+    sections: SELECTED_SECTIONS,
+    savedAt: new Date().toISOString()
+  };
+  localStorage.setItem(semesterStorageKey(), JSON.stringify(data));
+}
+
+function clearSemesterDraft() {
+  if (!confirm("Clear locally saved current-semester draft?")) return;
+  SELECTED_SECTIONS = [];
+  PREVIEW_SECTION = null;
+  localStorage.removeItem(semesterStorageKey());
+  renderSelectedSections();
+  renderCalendar();
+  showToast("Local current-semester draft cleared.");
+}
+
+async function searchSemesterCourses() {
+  const q = document.getElementById("semesterCourseQuery").value.trim();
+  const box = document.getElementById("semesterSectionResults");
+  if (!q) { box.innerHTML = `<div class="muted">Enter a course or keyword.</div>`; return; }
+  box.innerHTML = `<div class="muted">Searching...</div>`;
+  const exactCourseLike = /^[A-Za-z]{2,4}\s*[A-Za-z]{0,3}\s*\d{3}/.test(q);
+  const res = exactCourseLike ? await api("GET", "/api/courses/" + encodeURIComponent(q)) : await api("GET", "/api/courses?q=" + encodeURIComponent(q));
+  let sections = [];
+  if (res.data?.sections) sections = res.data.sections;
+  else if (res.data?.results) sections = res.data.results;
+  renderSemesterSectionResults(sections || []);
+}
+
+function renderSemesterSectionResults(sections) {
+  const box = document.getElementById("semesterSectionResults");
+  if (!sections.length) { box.innerHTML = `<div class="muted">No matching sections.</div>`; return; }
+  box.innerHTML = "";
+  sections.slice(0, 250).forEach(sec => {
+    const slim = slimSection(sec);
+    const selected = SELECTED_SECTIONS.some(s => sectionUid(s) === sectionUid(slim));
+    const conflict = !selected && SELECTED_SECTIONS.some(s => sectionsOverlap(s, slim));
+    const div = document.createElement("div");
+    div.className = "section-chip" + (selected ? " selected" : "") + (conflict ? " conflict" : "");
+    div.innerHTML = `<b>${escapeHtml(slim.course_code || "")} — ${escapeHtml(slim.display_title || slim.section || "Section")}</b><div class="section-meta">${escapeHtml(slim.days || "")} ${escapeHtml(slim.start || "")} - ${escapeHtml(slim.end || "")}<br>${escapeHtml(slim.instructor || "")}<br>${escapeHtml(slim.status || "")}</div>`;
+    div.onmouseenter = () => { PREVIEW_SECTION = slim; renderCalendar(); };
+    div.onmouseleave = () => { PREVIEW_SECTION = null; renderCalendar(); };
+    div.onclick = () => {
+      if (selected) {
+        SELECTED_SECTIONS = SELECTED_SECTIONS.filter(s => sectionUid(s) !== sectionUid(slim));
+      } else {
+        if (conflict) { showToast("That section conflicts with your current calendar."); return; }
+        SELECTED_SECTIONS.push(slim);
+      }
+      saveSemesterDraft();
+      renderSelectedSections();
+      renderCalendar();
+      renderSemesterSectionResults(sections);
+    };
+    box.appendChild(div);
+  });
+}
+
+function slimSection(sec) {
+  return {
+    course_code: sec.course_code,
+    course_title: sec.course_title,
+    class_nbr: sec.class_nbr,
+    section: sec.section,
+    display_title: sec.display_title || sec.section_code_title,
+    section_code_title: sec.section_code_title,
+    days: sec.days,
+    start: sec.start,
+    end: sec.end,
+    instructor: sec.instructor,
+    status: sec.status,
+    hub_areas: sec.hub?.hub_areas || sec.hub_areas || []
+  };
+}
+
+function renderSelectedSections() {
+  const box = document.getElementById("selectedSections");
+  if (!SELECTED_SECTIONS.length) { box.innerHTML = `<div class="muted">No sections selected yet.</div>`; return; }
+  box.innerHTML = "";
+  SELECTED_SECTIONS.forEach(sec => {
+    const div = document.createElement("div");
+    div.className = "section-chip selected";
+    div.innerHTML = `<b>${escapeHtml(sec.course_code || "")} — ${escapeHtml(sec.display_title || sec.section || "Section")}</b><div class="section-meta">${escapeHtml(sec.days || "")} ${escapeHtml(sec.start || "")} - ${escapeHtml(sec.end || "")}<br>${escapeHtml(sec.instructor || "")}</div><button class="small danger">Remove</button>`;
+    div.querySelector("button").onclick = (e) => { e.stopPropagation(); SELECTED_SECTIONS = SELECTED_SECTIONS.filter(s => sectionUid(s) !== sectionUid(sec)); saveSemesterDraft(); renderSelectedSections(); renderCalendar(); };
+    box.appendChild(div);
+  });
+}
+
+function renderCalendar() {
+  const grid = document.getElementById("calendarGrid");
+  grid.innerHTML = "";
+  grid.appendChild(cell("", "cal-head"));
+  DAYS.forEach(d => grid.appendChild(cell(d, "cal-head")));
+  for (let h = START_HOUR; h < END_HOUR; h++) {
+    grid.appendChild(cell(formatHour(h), "cal-time"));
+    DAYS.forEach(() => grid.appendChild(cell("", "cal-cell")));
+  }
+  const layer = document.createElement("div");
+  layer.className = "calendar-events-layer";
+  grid.appendChild(layer);
+  SELECTED_SECTIONS.forEach(sec => drawSectionEvent(layer, sec, ""));
+  if (PREVIEW_SECTION) drawSectionEvent(layer, PREVIEW_SECTION, SELECTED_SECTIONS.some(s => sectionsOverlap(s, PREVIEW_SECTION)) ? "conflict" : "preview");
+}
+
+function cell(text, cls) { const el=document.createElement("div"); el.className=cls; el.textContent=text; return el; }
+function formatHour(h) { const ap = h >= 12 ? "PM" : "AM"; const hr = ((h + 11) % 12) + 1; return `${hr}:00 ${ap}`; }
+
+function drawSectionEvent(layer, sec, extraClass) {
+  const start = timeToMin(sec.start), end = timeToMin(sec.end);
+  if (start == null || end == null || !sec.days) return;
+  const rowHeight = 42;
+  const headerHeight = 42;
+  const col0 = 64;
+  const gridWidth = document.getElementById("calendarGrid").clientWidth;
+  const dayWidth = (gridWidth - col0) / 5;
+  expandDays(sec.days).forEach(day => {
+    const dayIndex = DAYS.indexOf(day);
+    if (dayIndex < 0) return;
+    const top = headerHeight + ((start - START_HOUR*60) / 60) * rowHeight;
+    const height = Math.max(24, ((end - start) / 60) * rowHeight);
+    const left = col0 + dayIndex * dayWidth + 4;
+    const ev = document.createElement("div");
+    ev.className = "cal-event " + (extraClass || "");
+    ev.style.position = "absolute";
+    ev.style.left = `${left}px`;
+    ev.style.top = `${top}px`;
+    ev.style.width = `${dayWidth - 8}px`;
+    ev.style.height = `${height - 4}px`;
+    ev.innerHTML = `<b>${escapeHtml(sec.course_code || "")}</b><br>${escapeHtml(sec.display_title || sec.section || "")}<br>${escapeHtml(sec.start || "")}–${escapeHtml(sec.end || "")}`;
+    layer.appendChild(ev);
+  });
+}
+
+function expandDays(days) { const s=String(days||""); const out=[]; [["Mo","Mo"],["Tu","Tu"],["We","We"],["Th","Th"],["Fr","Fr"]].forEach(([token,val])=>{ if(s.includes(token)) out.push(val); }); return out; }
+function timeToMin(t) { const m=String(t||"").trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i); if(!m)return null; let h=Number(m[1]),min=Number(m[2]); const ap=m[3].toLowerCase(); if(ap==="pm"&&h!==12)h+=12; if(ap==="am"&&h===12)h=0; return h*60+min; }
+function sectionsOverlap(a,b) { const daysA=expandDays(a.days||""), daysB=expandDays(b.days||""); if (!daysA.some(d=>daysB.includes(d))) return false; const a1=timeToMin(a.start),a2=timeToMin(a.end),b1=timeToMin(b.start),b2=timeToMin(b.end); if([a1,a2,b1,b2].some(x=>x===null))return false; return a1 < b2 && b1 < a2; }
+
+async function suggestSemesterHubCourses() {
+  const box = document.getElementById("semesterHubSuggestions");
+  box.innerHTML = `<div class="muted">Searching Hub suggestions...</div>`;
+  let missing = [];
+  try { const draft = JSON.parse(localStorage.getItem("degreeScheduleDraft") || "{}"); missing = draft.hub_unfulfilled || []; } catch {}
+  if (!missing.length) missing = HUB_UNITS;
+  const found = [];
+  for (const unit of missing.slice(0,5)) {
+    const res = await api("GET", "/api/courses?hub=" + encodeURIComponent(unit));
+    const courses = res.data?.results || [];
+    for (const c of courses) {
+      const code = c.course_code || "";
+      const num = Number((code.match(/(\d{3})/) || [])[1]);
+      const hubs = c.hub?.hub_areas || [];
+      const slim = slimSection(c);
+      if (num >= 100 && num <= 299 && hubs.length >= 2 && !found.some(x => x.course_code === code) && !SELECTED_SECTIONS.some(s => sectionsOverlap(s, slim))) found.push(c);
+    }
+  }
+  if (!found.length) { box.innerHTML = `<div class="muted">No non-conflicting 100–200 level multi-Hub suggestions found.</div>`; return; }
+  renderSemesterSectionResults(found.slice(0,80));
+  box.innerHTML = found.slice(0,18).map(c => `<div class="section-chip"><b>${escapeHtml(c.course_code)}</b><div class="section-meta">${escapeHtml(c.course_title || c.hub?.name || "")}<br>${escapeHtml((c.hub?.hub_areas || []).join(", "))}<br>${escapeHtml(c.days || "")} ${escapeHtml(c.start || "")} - ${escapeHtml(c.end || "")}</div></div>`).join("");
+}
+
+function escapeHtml(str) { return String(str || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
+window.addEventListener("load", () => { loadSemesterDraft(); renderSelectedSections(); renderCalendar(); window.addEventListener("resize", renderCalendar); });
 </script>
 """
 
@@ -2037,6 +2436,11 @@ def reset_page():
 def build_page():
     return render_page(BUILD_CONTENT, BUILD_SCRIPT)
 
+
+
+@app.route("/semester")
+def semester_page():
+    return render_page(SEMESTER_CONTENT, SEMESTER_SCRIPT)
 
 @app.route("/schedules")
 def schedules_page():

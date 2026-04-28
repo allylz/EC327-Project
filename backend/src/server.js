@@ -289,6 +289,7 @@ function enrichSchedule(schedule) {
     hub_unfulfilled: Array.isArray(schedule.hub_unfulfilled)
       ? schedule.hub_unfulfilled
       : [],
+      graduated: Boolean(schedule.graduated),
     terms: enrichedTerms,
   };
 }
@@ -1194,7 +1195,7 @@ app.get("/api/schedules/:id", async (req, res) => {
 
 app.post("/api/schedules", requireAuth, async (req, res) => {
   try {
-    const { title, major, majors, comments, terms, hub_unfulfilled } = req.body;
+    const { title, major, comments, terms, hub_unfulfilled, graduated } = req.body;
 
 
     if (!title || !terms) {
@@ -1222,6 +1223,7 @@ app.post("/api/schedules", requireAuth, async (req, res) => {
         terms,
         hub_unfulfilled: Array.isArray(hub_unfulfilled) ? hub_unfulfilled : [],
         majors: Array.isArray(majors) ? majors : [],
+        graduated: Boolean(graduated),
 
       },
       create: {
@@ -1231,6 +1233,7 @@ app.post("/api/schedules", requireAuth, async (req, res) => {
         terms,
         hub_unfulfilled: Array.isArray(hub_unfulfilled) ? hub_unfulfilled : [],
         majors: Array.isArray(majors) ? majors : [],
+        graduated: Boolean(graduated),
 
         creatorId: req.session.userId,
       },
@@ -1294,8 +1297,7 @@ app.get("/api/my-schedule", requireAuth, async (req, res) => {
 
 app.put("/api/schedules/:id", requireAuth, async (req, res) => {
   try {
-    const { title, major, majors, comments, terms, hub_unfulfilled } = req.body;
-
+    const { title, major, comments, terms, hub_unfulfilled, graduated } = req.body;
 
     const schedule = await prisma.schedule.findUnique({
       where: {
@@ -1335,6 +1337,8 @@ app.put("/api/schedules/:id", requireAuth, async (req, res) => {
         comments,
         terms,
         hub_unfulfilled: Array.isArray(hub_unfulfilled) ? hub_unfulfilled : [],
+        graduated: Boolean(graduated),
+
       },
       include: {
         creator: {

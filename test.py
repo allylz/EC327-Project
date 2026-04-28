@@ -4466,7 +4466,291 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
 </script>
 </body>''')
 
+
+
+# v30: GCI duplicate fix, stronger plan title, visible Save/Load/Major tools, graduated boolean, duplicate required cleanup
+BASE_HTML = BASE_HTML.replace("</body>", r'''
+<style>
+#v30TopTools {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.25fr) minmax(250px, 0.75fr);
+  gap: 12px;
+  margin: 10px 0 12px;
+}
+#v30MajorBox, #v30ActionBox {
+  background: #ffffff;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  padding: 10px 12px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+#v30TopTools .settings-label { font-weight: 700; font-size: 13px; color: #334155; margin-bottom: 7px; }
+#v30MajorBox #majorCheckboxGrid, #v30MajorBox .major-checkbox-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+}
+.v30-action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.v30-action-row button { margin: 0; }
+.v30-last-save { margin-top: 8px; font-size: 12px; color: #64748b; }
+.v30-graduated {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 9px;
+}
+.v30-graduated input { width: auto; margin: 0; }
+@media (max-width: 900px) { #v30TopTools { grid-template-columns: 1fr; } }
+</style>
+<script>
+(function(){
+  function fallbackNameFromEmailV30(email){
+    if(!email || !String(email).includes('@')) return 'My';
+    const raw = String(email).split('@')[0]
+      .replace(/[0-9]+$/g, '')
+      .replace(/[._-]+/g, ' ')
+      .trim();
+    if(!raw) return 'My';
+    return raw.split(/\s+/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  }
+
+  function bestUserNameV30(){
+    const candidates = [];
+    try { if(window.CURRENT_USER) candidates.push(window.CURRENT_USER); } catch(e) {}
+    try { if(typeof CURRENT_USER !== 'undefined' && CURRENT_USER) candidates.push(CURRENT_USER); } catch(e) {}
+    try { const cached = JSON.parse(localStorage.getItem('lastKnownUser') || 'null'); if(cached) candidates.push(cached); } catch(e) {}
+    for(const u of candidates){
+      const display = (u.displayName || '').trim();
+      if(display && display.toLowerCase() !== 'student') return display.split(/\s+/)[0];
+      const emailName = fallbackNameFromEmailV30(u.email || '');
+      if(emailName !== 'My') return emailName;
+    }
+    const email = localStorage.getItem('loginEmail') || localStorage.getItem('registerEmail') || '';
+    return fallbackNameFromEmailV30(email);
+  }
+
+  async function refreshUserForTitleV30(){
+    try{
+      const res = await fetch('/proxy/api/auth/me', {credentials:'same-origin'});
+      const data = await res.json();
+      if(data && data.user){
+        window.CURRENT_USER = data.user;
+        try { CURRENT_USER = data.user; } catch(e) {}
+        localStorage.setItem('lastKnownUser', JSON.stringify(data.user));
+      }
+    }catch(e) {}
+    return setDegreePlanTitleV30();
+  }
+
+  function setDegreePlanTitleV30(){
+    const name = bestUserNameV30();
+    const title = `${name}'s Degree Plan`;
+    const h = document.getElementById('degreePlanTitle');
+    const input = document.getElementById('scheduleTitle');
+    if(h) h.textContent = title;
+    if(input) input.value = title;
+    return title;
+  }
+  window.setDegreePlanTitleV30 = setDegreePlanTitleV30;
+  window.updateDegreePlanTitleV26 = setDegreePlanTitleV30;
+  window.updateDegreePlanTitleV25 = setDegreePlanTitleV30;
+  window.updateDegreePlanTitleV24 = setDegreePlanTitleV30;
+
+  function niceTimeV30(iso){
+    if(!iso) return 'never';
+    const d = new Date(iso);
+    if(Number.isNaN(d.getTime())) return 'never';
+    return d.toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+  }
+  function updateLastSaveLabelV30(){
+    const el = document.getElementById('lastSaveTimestampV30');
+    if(!el) return;
+    const t = localStorage.getItem('degreeScheduleServerSaveAt') || localStorage.getItem('degreeScheduleDraftSavedAt');
+    el.textContent = 'Last save: ' + niceTimeV30(t);
+  }
+  window.updateLastSaveLabelV30 = updateLastSaveLabelV30;
+
+  function ensureVisibleTopToolsV30(){
+    const top = document.querySelector('.builder-top > div');
+    if(!top) return;
+
+    let tools = document.getElementById('v30TopTools');
+    if(!tools){
+      tools = document.createElement('div');
+      tools.id = 'v30TopTools';
+      tools.innerHTML = `
+        <div id="v30MajorBox">
+          <div class="settings-label">Majors</div>
+          <div id="v30MajorMount"></div>
+        </div>
+        <div id="v30ActionBox">
+          <div class="settings-label">Schedule</div>
+          <div class="v30-action-row">
+            <button type="button" onclick="saveScheduleV30()">Save</button>
+            <button type="button" class="secondary" onclick="loadMyScheduleV30()">Load saved</button>
+          </div>
+          <label class="v30-graduated"><input id="graduatedCheckbox" type="checkbox" onchange="saveLocalDegreeDraft()"> Graduated / finished degree</label>
+          <div id="lastSaveTimestampV30" class="v30-last-save">Last save: never</div>
+        </div>
+      `;
+      const title = document.getElementById('degreePlanTitle');
+      if(title) title.insertAdjacentElement('afterend', tools);
+      else top.prepend(tools);
+    }
+
+    if(typeof setupMajorCheckboxesV19 === 'function') setupMajorCheckboxesV19();
+    const existingGrid = document.getElementById('majorCheckboxGrid');
+    const mount = document.getElementById('v30MajorMount');
+    if(existingGrid && mount && existingGrid.parentElement !== mount) mount.appendChild(existingGrid);
+    const oldMajorShell = document.querySelector('.major-picker-shell');
+    if(oldMajorShell) oldMajorShell.style.display = 'none';
+
+    ['scheduleToolsV25','scheduleToolsV26','majorToolsV25','majorToolsV26'].forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.remove();
+    });
+
+    updateLastSaveLabelV30();
+    setDegreePlanTitleV30();
+    dedupeRequiredHeadingsV30();
+  }
+  window.ensureVisibleTopToolsV30 = ensureVisibleTopToolsV30;
+
+  window.saveScheduleV30 = async function(){
+    if(typeof saveSchedule !== 'function') return;
+    const result = await saveSchedule();
+    if(!result || result.status === undefined || result.status < 400){
+      const now = new Date().toISOString();
+      localStorage.setItem('degreeScheduleServerSaveAt', now);
+      localStorage.setItem('degreeScheduleDraftSavedAt', now);
+      updateLastSaveLabelV30();
+    }
+    return result;
+  };
+
+  window.loadMyScheduleV30 = async function(){
+    if(typeof loadMySchedule !== 'function') return;
+    const result = await loadMySchedule();
+    setTimeout(()=>{ ensureVisibleTopToolsV30(); updateGraduatedCheckboxFromScheduleV30(); }, 0);
+    updateLastSaveLabelV30();
+    return result;
+  };
+
+  function dedupeRequiredHeadingsV30(){
+    const panel = document.getElementById('requiredPanel');
+    if(!panel) return;
+    panel.querySelectorAll('.required-bank > h2, .required-bank > p.muted').forEach(el => el.remove());
+    const menu = panel.querySelector('.required-scroll-menu') || panel;
+    const headingBlocks = [...menu.querySelectorAll('.required-heading-v20')];
+    headingBlocks.forEach((el, i) => { if(i > 0) el.remove(); });
+    const headings = [...menu.querySelectorAll('h2')].filter(h => h.textContent.trim() === 'Required Courses');
+    headings.forEach((h, i) => {
+      if(i > 0 || !h.closest('.required-heading-v20')) {
+        const p = h.nextElementSibling;
+        if(p && p.classList.contains('muted') && p.textContent.includes('Already-placed')) p.remove();
+        h.remove();
+      }
+    });
+    const muted = [...menu.querySelectorAll('p.muted')].filter(p => p.textContent.includes('Already-placed requirements'));
+    muted.forEach((p, i) => { if(i > 0 || !p.closest('.required-heading-v20')) p.remove(); });
+  }
+  window.dedupeRequiredHeadingsV30 = dedupeRequiredHeadingsV30;
+
+  function hubFamilyCountsV30(){
+    const counts = {};
+    document.querySelectorAll('.course-card').forEach(card => {
+      let units = [];
+      try { units = JSON.parse(card.dataset.hubUnits || '[]'); } catch(e) { units = []; }
+      units.forEach(unit => {
+        const fam = (typeof hubFamily === 'function') ? hubFamily(unit) : String(unit || '').toLowerCase();
+        if(!fam) return;
+        counts[fam] = (counts[fam] || 0) + 1;
+      });
+    });
+    return counts;
+  }
+
+  window.getUnfulfilledHubUnits = function(){
+    const counts = hubFamilyCountsV30();
+    const seenReq = {};
+    return HUB_UNITS.filter(unit => {
+      const fam = (typeof hubFamily === 'function') ? hubFamily(unit) : String(unit || '').toLowerCase();
+      seenReq[fam] = (seenReq[fam] || 0) + 1;
+      const requiredOccurrence = seenReq[fam];
+      return (counts[fam] || 0) < requiredOccurrence;
+    });
+  };
+
+  window.setupHubChecklist = function(unfulfilled){
+    const box = document.getElementById('hubChecklist');
+    if(!box) return;
+    const missing = new Set(unfulfilled || getUnfulfilledHubUnits());
+    box.innerHTML = HUB_UNITS.map(unit => {
+      const done = !missing.has(unit);
+      return `<label class="hub-track-item ${done ? 'done' : 'missing'}"><input type="checkbox" disabled ${done ? 'checked' : ''}> ${escapeHtml(unit)}</label>`;
+    }).join('');
+  };
+
+  function updateGraduatedCheckboxFromScheduleV30(schedule){
+    const box = document.getElementById('graduatedCheckbox');
+    if(!box) return;
+    let val = false;
+    if(schedule && typeof schedule.graduated === 'boolean') val = schedule.graduated;
+    else {
+      try { val = !!JSON.parse(localStorage.getItem('degreeScheduleDraft') || '{}').graduated; } catch(e) { val = false; }
+    }
+    box.checked = val;
+  }
+  window.updateGraduatedCheckboxFromScheduleV30 = updateGraduatedCheckboxFromScheduleV30;
+
+  if(typeof buildScheduleJson === 'function'){
+    const prevBuildV30 = buildScheduleJson;
+    buildScheduleJson = function(){
+      const schedule = prevBuildV30();
+      schedule.title = setDegreePlanTitleV30();
+      const grad = document.getElementById('graduatedCheckbox');
+      schedule.graduated = !!(grad && grad.checked);
+      return schedule;
+    };
+  }
+
+  if(typeof renderSchedule === 'function'){
+    const prevRenderV30 = renderSchedule;
+    renderSchedule = function(schedule){
+      prevRenderV30(schedule);
+      setTimeout(()=>{
+        ensureVisibleTopToolsV30();
+        updateGraduatedCheckboxFromScheduleV30(schedule);
+        if(typeof setupHubChecklist === 'function') setupHubChecklist(getUnfulfilledHubUnits());
+      }, 0);
+    };
+  }
+
+  if(typeof updateHeaderAuth === 'function'){
+    const prevHeaderV30 = updateHeaderAuth;
+    updateHeaderAuth = async function(){
+      const result = await prevHeaderV30();
+      await refreshUserForTitleV30();
+      return result;
+    };
+  }
+
+  window.addEventListener('load', () => {
+    setTimeout(async()=>{ await refreshUserForTitleV30(); ensureVisibleTopToolsV30(); updateGraduatedCheckboxFromScheduleV30(); if(typeof setupHubChecklist === 'function') setupHubChecklist(getUnfulfilledHubUnits()); }, 100);
+    setTimeout(()=>{ ensureVisibleTopToolsV30(); dedupeRequiredHeadingsV30(); setDegreePlanTitleV30(); }, 500);
+    setTimeout(()=>{ ensureVisibleTopToolsV30(); dedupeRequiredHeadingsV30(); setDegreePlanTitleV30(); }, 1200);
+  });
+})();
+</script>
+</body>''')
+
 if __name__ == "__main__":
-    print("version: 29")
+    print("iteration 30 ;-;")
     port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", debug=True, port=port)

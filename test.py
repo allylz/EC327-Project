@@ -1206,6 +1206,12 @@ BASE_HTML = r"""
     .calendar-events-layer { position:absolute; inset:0; pointer-events:none; }
     .semester-controls-slim { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .semester-controls-slim button { width:auto; }
+
+    .selected-course-group { border:1px solid var(--line); border-radius:14px; background:#fff; margin:10px 0; overflow:hidden; }
+    .selected-course-group-header { padding:10px 12px; font-weight:800; background:#f8fafc; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:10px; }
+    .selected-course-group-body { padding:10px; display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:10px; }
+    .degree-term-course-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px; }
+    .tiny-pill { display:inline-flex; align-items:center; border-radius:999px; padding:2px 8px; background:#eef2ff; color:#3730a3; font-size:11px; font-weight:700; margin-right:4px; margin-top:4px; }
     @media (max-width: 1100px) {
       .builder-workspace, .semester-page { grid-template-columns: 1fr !important; }
       .required-side, .semester-left { position: static !important; height:auto !important; max-height:none !important; }
@@ -2006,6 +2012,119 @@ function hubCourseEntriesFromData(data) {
   }));
 }
 
+
+function getDegreeDraftForSemesterPicker() {
+  try { return JSON.parse(localStorage.getItem("degreeScheduleDraft") || "{}"); }
+  catch { return {}; }
+}
+
+function refreshDegreeTermPicker() {
+  const select = document.getElementById("degreeTermSelect");
+  const picker = document.getElementById("degreeTermCoursePicker");
+  if (!select || !picker) return;
+  const draft = getDegreeDraftForSemesterPicker();
+  const terms = draft.terms || {};
+  const termNames = Object.keys(terms).filter(t => Array.isArray(terms[t]) && terms[t].length);
+  if (!termNames.length) {
+    select.innerHTML = `<option value="">No saved degree-plan semesters found</option>`;
+    picker.innerHTML = `<div class="muted">Save or autosave your Degree Plan first, then refresh here.</div>`;
+    return;
+  }
+  const previous = select.value;
+  select.innerHTML = termNames.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+  if (previous && termNames.includes(previous)) select.value = previous;
+  renderDegreeTermCourses();
+}
+
+function renderDegreeTermCourses() {
+  const select = document.getElementById("degreeTermSelect");
+  const picker = document.getElementById("degreeTermCoursePicker");
+  if (!select || !picker) return;
+  const term = select.value;
+  const draft = getDegreeDraftForSemesterPicker();
+  const courses = (draft.terms || {})[term] || [];
+  if (!term || !courses.length) {
+    picker.innerHTML = `<div class="muted">No courses in this semester.</div>`;
+    return;
+  }
+  picker.innerHTML = `<div class="degree-term-course-grid">` + courses.map(c => {
+    const code = extractActualCourseCode(c.selected_course_code || c.course_code || "");
+    const label = c.course_code || code;
+    const sub = c.comments || c.sublabel || c.requirement_type || "Click to search sections";
+    return `<div class="section-chip" onclick="searchFromDegreeCourse('${escapeHtml(code).replaceAll("'", "\\'")}')"><b>${escapeHtml(label)}</b><div class="section-meta">${escapeHtml(sub)}</div></div>`;
+  }).join("") + `</div>`;
+}
+
+async function searchFromDegreeCourse(code) {
+  if (!code) return;
+  document.getElementById("semesterCourseQuery").value = code;
+  await searchSemesterCourses();
+  document.getElementById("semesterSectionResults")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function sectionType(sec) {
+  const text = `${sec.display_title || ""} ${sec.section_code_title || ""} ${sec.section || ""}`.toUpperCase();
+  if (text.includes("LAB") || /^L\d/.test(String(sec.section || "").toUpperCase()) || /^M\d/.test(String(sec.section || "").toUpperCase())) return "LAB";
+  if (text.includes("DIS") || text.includes("DISC") || /^D\d/.test(String(sec.section || "").toUpperCase()) || /^E\d/.test(String(sec.section || "").toUpperCase())) return "DIS";
+  if (text.includes("LEC") || /^[ABC]\d/.test(String(sec.section || "").toUpperCase())) return "LEC";
+  return "OTHER";
+}
+
+function sectionIsUsable(sec) {
+  const status = String(sec.status || "").toLowerCase();
+  return status.includes("open") && !status.includes("0 of") && sec.days && sec.start && sec.end;
+}
+
+function noInternalOverlap(bundle) {
+  for (let i = 0; i < bundle.length; i++) {
+    for (let j = i + 1; j < bundle.length; j++) {
+      if (sectionsOverlap(bundle[i], bundle[j])) return false;
+    }
+  }
+  return true;
+}
+
+function bundleFitsExisting(bundle) {
+  return bundle.every(sec => !SELECTED_SECTIONS.some(existing => sectionsOverlap(existing, sec)));
+}
+
+function findCompatibleSectionBundle(sections) {
+  const usable = (sections || []).map(slimSection).filter(sectionIsUsable);
+  if (!usable.length) return null;
+  const byType = { LEC: [], DIS: [], LAB: [], OTHER: [] };
+  usable.forEach(sec => { byType[sectionType(sec)].push(sec); });
+
+  const requiredTypes = [];
+  if (byType.LEC.length) requiredTypes.push("LEC");
+  if (byType.DIS.length) requiredTypes.push("DIS");
+  if (byType.LAB.length) requiredTypes.push("LAB");
+  if (!requiredTypes.length && byType.OTHER.length) requiredTypes.push("OTHER");
+
+  function backtrack(idx, chosen) {
+    if (idx === requiredTypes.length) {
+      return noInternalOverlap(chosen) && bundleFitsExisting(chosen) ? chosen : null;
+    }
+    const type = requiredTypes[idx];
+    for (const sec of byType[type].slice(0, 35)) {
+      if (chosen.some(c => sectionsOverlap(c, sec))) continue;
+      if (SELECTED_SECTIONS.some(existing => sectionsOverlap(existing, sec))) continue;
+      const got = backtrack(idx + 1, [...chosen, sec]);
+      if (got) return got;
+    }
+    return null;
+  }
+
+  return backtrack(0, []);
+}
+
+function matchedMissingHubAreas(entry, missing=[]) {
+  const areas = entry.hub_areas || [];
+  const matched = [];
+  for (const req of missing || []) {
+    if (areas.some(area => hubMatchesRequirement(area, req))) matched.push(req);
+  }
+  return matched;
+}
 function normalizeHubSearchText(text) {
   return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -2405,8 +2524,6 @@ SEMESTER_CONTENT = r"""
     <input id="semesterCourseQuery" placeholder="Example: CAS PY 212 or software" onkeydown="if(event.key==='Enter') searchSemesterCourses()">
     <button onclick="searchSemesterCourses()">Search Sections</button>
     <div id="semesterSectionResults" class="section-search-list"><div class="muted">Search results will appear here.</div></div>
-    <h3>Selected Sections</h3>
-    <div id="selectedSections" class="selected-section-list"><div class="muted">No sections selected yet.</div></div>
     <h3>Hub Suggestions</h3>
     <p class="muted">Suggests 100–200 level Hub courses that satisfy multiple missing Hub units and do not conflict with your selected sections.</p>
     <button class="secondary" onclick="suggestSemesterHubCourses()">Suggest Hub Courses</button>
@@ -2414,7 +2531,16 @@ SEMESTER_CONTENT = r"""
   </section>
   <section class="calendar-shell">
     <h2>Weekly Calendar</h2>
+    <div class="semester-controls-slim" style="margin-bottom:10px;">
+      <select id="degreeTermSelect" onchange="renderDegreeTermCourses()"></select>
+      <button class="secondary" onclick="refreshDegreeTermPicker()">Refresh Degree Plan Classes</button>
+    </div>
+    <div id="degreeTermCoursePicker" class="section-search-list" style="max-height:170px; margin-bottom:12px;">
+      <div class="muted">Choose a semester from your degree plan to search its classes.</div>
+    </div>
     <div id="calendarGrid" class="calendar-grid"></div>
+    <h3 style="margin-top:18px;">Selected Sections</h3>
+    <div id="selectedSections" class="selected-section-list"><div class="muted">No sections selected yet.</div></div>
   </section>
 </div>
 """
@@ -2529,15 +2655,48 @@ function slimSection(sec) {
 
 function renderSelectedSections() {
   const box = document.getElementById("selectedSections");
-  if (!SELECTED_SECTIONS.length) { box.innerHTML = `<div class="muted">No sections selected yet.</div>`; return; }
-  box.innerHTML = "";
+  if (!box) return;
+  if (!SELECTED_SECTIONS.length) {
+    box.innerHTML = `<div class="muted">No sections selected yet.</div>`;
+    return;
+  }
+
+  const groups = {};
   SELECTED_SECTIONS.forEach(sec => {
-    const div = document.createElement("div");
-    div.className = "section-chip selected";
-    div.innerHTML = `<b>${escapeHtml(sec.course_code || "")} — ${escapeHtml(sec.display_title || sec.section || "Section")}</b><div class="section-meta">${escapeHtml(sec.days || "")} ${escapeHtml(sec.start || "")} - ${escapeHtml(sec.end || "")}<br>${escapeHtml(sec.instructor || "")}</div><button class="small danger">Remove</button>`;
-    div.querySelector("button").onclick = (e) => { e.stopPropagation(); SELECTED_SECTIONS = SELECTED_SECTIONS.filter(s => sectionUid(s) !== sectionUid(sec)); saveSemesterDraft(); renderSelectedSections(); renderCalendar(); };
-    box.appendChild(div);
+    const key = sec.course_code || "Other";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(sec);
   });
+
+  box.innerHTML = Object.entries(groups).map(([courseCode, sections]) => {
+    const courseTitle = sections.find(s => s.course_title)?.course_title || "";
+    const body = sections.map(sec => `
+      <div class="section-chip selected">
+        <b>${escapeHtml(sec.display_title || sec.section || "Section")}</b>
+        <div class="section-meta">
+          ${escapeHtml(sec.days || "")} ${escapeHtml(sec.start || "")} - ${escapeHtml(sec.end || "")}<br>
+          ${escapeHtml(sec.instructor || "")}
+        </div>
+        <button class="small danger" onclick="removeSelectedSection('${escapeHtml(sectionUid(sec)).replaceAll("'", "\\'")}')">Remove</button>
+      </div>
+    `).join("");
+    return `
+      <div class="selected-course-group">
+        <div class="selected-course-group-header">
+          <span>${escapeHtml(courseCode)}${courseTitle ? " — " + escapeHtml(courseTitle) : ""}</span>
+          <span class="muted">${sections.length} selected</span>
+        </div>
+        <div class="selected-course-group-body">${body}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function removeSelectedSection(uid) {
+  SELECTED_SECTIONS = SELECTED_SECTIONS.filter(s => sectionUid(s) !== uid);
+  saveSemesterDraft();
+  renderSelectedSections();
+  renderCalendar();
 }
 
 function renderCalendar() {
@@ -2590,6 +2749,119 @@ function timeToMin(t) { const m=String(t||"").trim().match(/^(\d{1,2}):(\d{2})\s
 function sectionsOverlap(a,b) { const daysA=expandDays(a.days||""), daysB=expandDays(b.days||""); if (!daysA.some(d=>daysB.includes(d))) return false; const a1=timeToMin(a.start),a2=timeToMin(a.end),b1=timeToMin(b.start),b2=timeToMin(b.end); if([a1,a2,b1,b2].some(x=>x===null))return false; return a1 < b2 && b1 < a2; }
 
 
+
+function getDegreeDraftForSemesterPicker() {
+  try { return JSON.parse(localStorage.getItem("degreeScheduleDraft") || "{}"); }
+  catch { return {}; }
+}
+
+function refreshDegreeTermPicker() {
+  const select = document.getElementById("degreeTermSelect");
+  const picker = document.getElementById("degreeTermCoursePicker");
+  if (!select || !picker) return;
+  const draft = getDegreeDraftForSemesterPicker();
+  const terms = draft.terms || {};
+  const termNames = Object.keys(terms).filter(t => Array.isArray(terms[t]) && terms[t].length);
+  if (!termNames.length) {
+    select.innerHTML = `<option value="">No saved degree-plan semesters found</option>`;
+    picker.innerHTML = `<div class="muted">Save or autosave your Degree Plan first, then refresh here.</div>`;
+    return;
+  }
+  const previous = select.value;
+  select.innerHTML = termNames.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+  if (previous && termNames.includes(previous)) select.value = previous;
+  renderDegreeTermCourses();
+}
+
+function renderDegreeTermCourses() {
+  const select = document.getElementById("degreeTermSelect");
+  const picker = document.getElementById("degreeTermCoursePicker");
+  if (!select || !picker) return;
+  const term = select.value;
+  const draft = getDegreeDraftForSemesterPicker();
+  const courses = (draft.terms || {})[term] || [];
+  if (!term || !courses.length) {
+    picker.innerHTML = `<div class="muted">No courses in this semester.</div>`;
+    return;
+  }
+  picker.innerHTML = `<div class="degree-term-course-grid">` + courses.map(c => {
+    const code = extractActualCourseCode(c.selected_course_code || c.course_code || "");
+    const label = c.course_code || code;
+    const sub = c.comments || c.sublabel || c.requirement_type || "Click to search sections";
+    return `<div class="section-chip" onclick="searchFromDegreeCourse('${escapeHtml(code).replaceAll("'", "\\'")}')"><b>${escapeHtml(label)}</b><div class="section-meta">${escapeHtml(sub)}</div></div>`;
+  }).join("") + `</div>`;
+}
+
+async function searchFromDegreeCourse(code) {
+  if (!code) return;
+  document.getElementById("semesterCourseQuery").value = code;
+  await searchSemesterCourses();
+  document.getElementById("semesterSectionResults")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function sectionType(sec) {
+  const text = `${sec.display_title || ""} ${sec.section_code_title || ""} ${sec.section || ""}`.toUpperCase();
+  if (text.includes("LAB") || /^L\d/.test(String(sec.section || "").toUpperCase()) || /^M\d/.test(String(sec.section || "").toUpperCase())) return "LAB";
+  if (text.includes("DIS") || text.includes("DISC") || /^D\d/.test(String(sec.section || "").toUpperCase()) || /^E\d/.test(String(sec.section || "").toUpperCase())) return "DIS";
+  if (text.includes("LEC") || /^[ABC]\d/.test(String(sec.section || "").toUpperCase())) return "LEC";
+  return "OTHER";
+}
+
+function sectionIsUsable(sec) {
+  const status = String(sec.status || "").toLowerCase();
+  return status.includes("open") && !status.includes("0 of") && sec.days && sec.start && sec.end;
+}
+
+function noInternalOverlap(bundle) {
+  for (let i = 0; i < bundle.length; i++) {
+    for (let j = i + 1; j < bundle.length; j++) {
+      if (sectionsOverlap(bundle[i], bundle[j])) return false;
+    }
+  }
+  return true;
+}
+
+function bundleFitsExisting(bundle) {
+  return bundle.every(sec => !SELECTED_SECTIONS.some(existing => sectionsOverlap(existing, sec)));
+}
+
+function findCompatibleSectionBundle(sections) {
+  const usable = (sections || []).map(slimSection).filter(sectionIsUsable);
+  if (!usable.length) return null;
+  const byType = { LEC: [], DIS: [], LAB: [], OTHER: [] };
+  usable.forEach(sec => { byType[sectionType(sec)].push(sec); });
+
+  const requiredTypes = [];
+  if (byType.LEC.length) requiredTypes.push("LEC");
+  if (byType.DIS.length) requiredTypes.push("DIS");
+  if (byType.LAB.length) requiredTypes.push("LAB");
+  if (!requiredTypes.length && byType.OTHER.length) requiredTypes.push("OTHER");
+
+  function backtrack(idx, chosen) {
+    if (idx === requiredTypes.length) {
+      return noInternalOverlap(chosen) && bundleFitsExisting(chosen) ? chosen : null;
+    }
+    const type = requiredTypes[idx];
+    for (const sec of byType[type].slice(0, 35)) {
+      if (chosen.some(c => sectionsOverlap(c, sec))) continue;
+      if (SELECTED_SECTIONS.some(existing => sectionsOverlap(existing, sec))) continue;
+      const got = backtrack(idx + 1, [...chosen, sec]);
+      if (got) return got;
+    }
+    return null;
+  }
+
+  return backtrack(0, []);
+}
+
+function matchedMissingHubAreas(entry, missing=[]) {
+  const areas = entry.hub_areas || [];
+  const matched = [];
+  for (const req of missing || []) {
+    if (areas.some(area => hubMatchesRequirement(area, req))) matched.push(req);
+  }
+  return matched;
+}
 function normalizeHubSearchText(text) {
   return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
@@ -2641,21 +2913,61 @@ function hubEntriesForSemester(data) {
 }
 async function suggestSemesterHubCourses() {
   const box = document.getElementById("semesterHubSuggestions");
-  box.innerHTML = `<div class="muted">Searching Hub data...</div>`;
+  box.innerHTML = `<div class="muted">Searching Hub data and checking section fit...</div>`;
+
   let missing = [];
-  try { const draft = JSON.parse(localStorage.getItem("degreeScheduleDraft") || "{}"); missing = draft.hub_unfulfilled || []; } catch {}
+  try {
+    const draft = JSON.parse(localStorage.getItem("degreeScheduleDraft") || "{}");
+    missing = draft.hub_unfulfilled || [];
+  } catch {}
   if (!missing.length) missing = HUB_UNITS;
+
   const data = await getHubDataObjectForSemester();
-  const found = hubEntriesForSemester(data)
-    .map(c => ({ ...c, missingMatches: countMatchingMissingHubAreas(c, missing) }))
+  const candidates = hubEntriesForSemester(data)
+    .map(c => ({
+      ...c,
+      filledHubUnits: matchedMissingHubAreas(c, missing),
+      missingMatches: countMatchingMissingHubAreas(c, missing)
+    }))
     .filter(c => {
       const num = Number((String(c.course_code).match(/(\d{3})/) || [])[1]);
       return num >= 100 && num <= 299 && c.missingMatches >= 2;
     })
-    .sort((a,b) => (b.missingMatches - a.missingMatches) || (b.hub_areas.length - a.hub_areas.length) || a.course_code.localeCompare(b.course_code));
-  if (!found.length) { box.innerHTML = `<div class="muted">No 100–200 level Hub courses matched 2+ of your missing Hub units. Try marking fewer units as fulfilled or search Hub courses manually from the Degree Plan page.</div>`; return; }
-  box.innerHTML = found.slice(0,24).map(c => `<div class="section-chip" onclick="loadSuggestedHubSections('${c.course_code.replace(/'/g,"\\'")}')"><b>${escapeHtml(c.course_code)}</b><div class="section-meta">${escapeHtml(c.course_title)}<br>${escapeHtml((c.hub_areas || []).join(", "))}<br><span class="muted">Click to load available sections.</span></div></div>`).join("");
+    .sort((a,b) => (b.missingMatches - a.missingMatches) || (b.hub_areas.length - a.hub_areas.length) || a.course_code.localeCompare(b.course_code))
+    .slice(0, 45);
+
+  const fits = [];
+  for (const c of candidates) {
+    if (fits.length >= 18) break;
+    try {
+      const res = await api("GET", "/api/courses/" + encodeURIComponent(c.course_code));
+      const sections = res.data?.sections || [];
+      const bundle = findCompatibleSectionBundle(sections);
+      if (bundle) fits.push({ ...c, bundle });
+    } catch (err) {
+      console.warn("Could not check sections for", c.course_code, err);
+    }
+  }
+
+  if (!fits.length) {
+    box.innerHTML = `<div class="muted">No 100–200 level multi-Hub suggestions had a complete non-conflicting section set. Try removing a selected section, widening the missing Hub list, or manually searching a Hub course.</div>`;
+    return;
+  }
+
+  box.innerHTML = fits.map(c => {
+    const fills = c.filledHubUnits && c.filledHubUnits.length ? c.filledHubUnits : [];
+    const bundleText = c.bundle.map(sec => `${sec.section || sec.display_title || "Section"}: ${sec.days || ""} ${sec.start || ""}-${sec.end || ""}`).join(" | ");
+    return `<div class="section-chip" onclick="loadSuggestedHubSections('${c.course_code.replace(/'/g,"\\'")}')">
+      <b>${escapeHtml(c.course_code)} — ${escapeHtml(c.course_title)}</b>
+      <div class="section-meta">
+        <div><b>Fills:</b> ${fills.map(x => `<span class="tiny-pill">${escapeHtml(x)}</span>`).join(" ")}</div>
+        <div class="muted">Compatible set found: ${escapeHtml(bundleText)}</div>
+        <div class="muted">Click to load available sections.</div>
+      </div>
+    </div>`;
+  }).join("");
 }
+
 async function loadSuggestedHubSections(code) {
   document.getElementById("semesterCourseQuery").value = code;
   await searchSemesterCourses();
@@ -2663,7 +2975,13 @@ async function loadSuggestedHubSections(code) {
 
 
 function escapeHtml(str) { return String(str || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
-window.addEventListener("load", () => { loadSemesterDraft(); renderSelectedSections(); renderCalendar(); window.addEventListener("resize", renderCalendar); });
+window.addEventListener("load", () => {
+  loadSemesterDraft();
+  refreshDegreeTermPicker();
+  renderSelectedSections();
+  renderCalendar();
+  window.addEventListener("resize", renderCalendar);
+});
 </script>
 """
 

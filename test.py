@@ -1496,7 +1496,7 @@ BASE_HTML = r"""
     <nav>
       <span class="hello-pill" id="helloUser">Hello, guest</span>
       <a href="/build">Degree Plan</a>
-      <a href="/semester">Current Semester</a>
+      <a href="/semester">Semester Planning</a>
       <a href="/schedules">View Schedules</a>
       <a href="/login" id="loginRegisterLink">Login / Register</a>
       <button id="navLogoutBtn" onclick="logoutFromNav()" style="display:none;">Logout</button>
@@ -3663,7 +3663,7 @@ window.addEventListener("load", () => { setTimeout(applyV20Ui, 400); });
 SEMESTER_CONTENT = r"""
 <div class="semester-page">
   <section class="semester-left">
-    <h2>Current Semester Builder</h2>
+    <h2>Semester Planning</h2>
     <p class="muted">Search for a course, choose exact sections, and build a weekly calendar. This saves locally in your browser immediately, so reloads do not erase your work.</p>
     <div class="semester-controls-slim">
       <input id="semesterName" placeholder="Example: Fall 2026" value="Current Semester" oninput="saveSemesterDraft()">
@@ -3736,13 +3736,13 @@ function saveSemesterDraft() {
 }
 
 function clearSemesterDraft() {
-  if (!confirm("Clear locally saved current-semester draft?")) return;
+  if (!confirm("Clear locally saved semester-planning draft?")) return;
   SELECTED_SECTIONS = [];
   PREVIEW_SECTION = null;
   localStorage.removeItem(semesterStorageKey());
   renderSelectedSections();
   renderCalendar();
-  showToast("Local current-semester draft cleared.");
+  showToast("Local semester-planning draft cleared.");
 }
 
 function extractActualCourseCode(code) {
@@ -4353,6 +4353,175 @@ window.addEventListener('load', () => { setupScheduleFilters(); loadSchedules();
 </script>
 """
 
+
+
+# =============================================================================
+# v35 patch: hover expansion, live comment counts, semester ordering, renamed page polish
+# =============================================================================
+BASE_HTML = BASE_HTML.replace("</style>", r'''
+
+/* v35: course-card hover expansion and semester planning polish */
+.term-box .course-card,
+.required-bank .course-card,
+#degreeTermCoursePicker .section-chip,
+.schedule-term-mini .mini-course-line {
+  transition: transform .16s ease, box-shadow .16s ease, width .16s ease, max-height .16s ease, background-color .16s ease;
+}
+.term-box .course-card:hover,
+.required-bank .course-card:hover {
+  transform: translateY(-2px) scale(1.025);
+  width: 360px !important;
+  max-width: min(360px, calc(100vw - 44px)) !important;
+  min-height: 138px !important;
+  z-index: 40;
+  box-shadow: 0 18px 42px rgba(15,23,42,.18) !important;
+  border-color: #93c5fd !important;
+}
+.term-box .course-card:hover .detail,
+.required-bank .course-card:hover .detail {
+  max-height: 120px;
+  overflow: auto;
+}
+.course-card .detail { max-height: 52px; overflow: hidden; }
+.comment-count.loading { opacity: .55; }
+</style>''')
+
+BASE_HTML = BASE_HTML.replace("</body>", r'''
+<script>
+(function(){
+  const TERM_SORT_ORDER_V35 = [
+    'Transferred Courses',
+    'Freshman Fall','Freshman Spring','Freshman Summer',
+    'Sophomore Fall','Sophomore Spring','Sophomore Summer',
+    'Junior Fall','Junior Spring','Junior Summer',
+    'Senior Fall','Senior Spring','Senior Summer'
+  ];
+
+  function termSortIndexV35(term){
+    const exact = TERM_SORT_ORDER_V35.indexOf(String(term || ''));
+    if(exact >= 0) return exact;
+    const t = String(term || '').toLowerCase();
+    const yearBase = t.includes('freshman') ? 1 : t.includes('sophomore') ? 4 : t.includes('junior') ? 7 : t.includes('senior') ? 10 : 100;
+    const semOffset = t.includes('fall') ? 0 : t.includes('spring') ? 1 : t.includes('summer') ? 2 : 3;
+    return yearBase + semOffset;
+  }
+
+  function sortTermsV35(names){
+    return [...names].sort((a,b)=>{
+      const ia = termSortIndexV35(a), ib = termSortIndexV35(b);
+      if(ia !== ib) return ia - ib;
+      return String(a).localeCompare(String(b));
+    });
+  }
+  window.sortTermsV35 = sortTermsV35;
+
+  function cleanActualCourseCodeV35(raw){
+    const s = String(raw || '').trim();
+    const paren = s.match(/\(([A-Z]{2,}\s*[A-Z]{0,4}\s*\d{3}[A-Z]?)\)/i);
+    const base = (paren ? paren[1] : s).trim();
+    const direct = base.match(/([A-Z]{2,}\s*[A-Z]{0,4}\s*\d{3}[A-Z]?)/i);
+    return (direct ? direct[1] : base).replace(/\s+/g,' ').toUpperCase();
+  }
+
+  async function fetchCommentCountV35(code){
+    const clean = cleanActualCourseCodeV35(code);
+    if(!clean || clean.toLowerCase().includes('elective') || clean.toLowerCase().includes('required')) return 0;
+    try{
+      const res = await fetch('/proxy/api/course-comments?course_code=' + encodeURIComponent(clean), {credentials:'same-origin'});
+      if(!res.ok) return 0;
+      const data = await res.json();
+      const comments = Array.isArray(data.comments) ? data.comments : Array.isArray(data.data?.comments) ? data.data.comments : [];
+      return comments.length;
+    }catch(err){ return 0; }
+  }
+
+  async function refreshCommentCountsV35(root=document){
+    const cards = [...root.querySelectorAll('.course-card')];
+    await Promise.all(cards.map(async card => {
+      const countEl = card.querySelector('.comment-count');
+      if(!countEl) return;
+      const code = card.dataset.code || card.querySelector('.code')?.textContent || '';
+      countEl.classList.add('loading');
+      const n = await fetchCommentCountV35(code);
+      card.dataset.commentCount = String(n);
+      countEl.textContent = n > 9 ? '9+' : String(n);
+      countEl.classList.remove('loading');
+    }));
+  }
+  window.refreshCommentCountsV35 = refreshCommentCountsV35;
+
+  const oldSaveModalCommentV35 = (typeof window.saveModalComment === 'function') ? window.saveModalComment : null;
+  if(oldSaveModalCommentV35){
+    window.saveModalComment = async function(){
+      const result = await oldSaveModalCommentV35.apply(this, arguments);
+      setTimeout(()=>refreshCommentCountsV35(), 150);
+      return result;
+    };
+  }
+
+  if(typeof window.refreshDegreeTermPicker === 'function'){
+    const oldRefreshDegreeTermPickerV35 = window.refreshDegreeTermPicker;
+    window.refreshDegreeTermPicker = function(){
+      const select = document.getElementById('degreeTermSelect');
+      const picker = document.getElementById('degreeTermCoursePicker');
+      if(!select || !picker) return oldRefreshDegreeTermPickerV35.apply(this, arguments);
+      const draft = (typeof getDegreeDraftForSemesterPicker === 'function') ? getDegreeDraftForSemesterPicker() : (()=>{try{return JSON.parse(localStorage.getItem('degreeScheduleDraft')||'{}')}catch{return {}}})();
+      const terms = draft.terms || {};
+      const termNames = sortTermsV35(Object.keys(terms).filter(t => Array.isArray(terms[t]) && terms[t].length));
+      if(!termNames.length){
+        select.innerHTML = `<option value="">No saved degree-plan semesters found</option>`;
+        picker.innerHTML = `<div class="muted">Load/save your Degree Plan first, then refresh here.</div>`;
+        return;
+      }
+      const previous = select.value;
+      select.innerHTML = termNames.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+      if(previous && termNames.includes(previous)) select.value = previous;
+      if(typeof renderDegreeTermCourses === 'function') renderDegreeTermCourses();
+    };
+  }
+
+  if(typeof window.renderSchedules === 'function'){
+    const oldRenderSchedulesV35 = window.renderSchedules;
+    window.renderSchedules = function(schedules){
+      try{
+        if(Array.isArray(window.SCHEDULE_TERM_ORDER)){
+          window.SCHEDULE_TERM_ORDER.splice(0, window.SCHEDULE_TERM_ORDER.length, ...TERM_SORT_ORDER_V35);
+        }
+      }catch(e){}
+      return oldRenderSchedulesV35.apply(this, arguments);
+    };
+  }
+
+  window.addEventListener('load', () => {
+    document.querySelectorAll('a,h1,h2,h3,button,span,div,p').forEach(el => {
+      if(el.childNodes.length === 1 && el.childNodes[0].nodeType === Node.TEXT_NODE){
+        el.textContent = el.textContent.replace('Current Semester', 'Semester Planning');
+      }
+    });
+    setTimeout(()=>refreshCommentCountsV35(), 300);
+    setTimeout(()=>refreshCommentCountsV35(), 1200);
+    setTimeout(()=>{ if(typeof refreshDegreeTermPicker === 'function') refreshDegreeTermPicker(); }, 250);
+  });
+
+  if(typeof window.renderSchedule === 'function'){
+    const oldRenderScheduleV35 = window.renderSchedule;
+    window.renderSchedule = function(schedule){
+      const result = oldRenderScheduleV35.apply(this, arguments);
+      setTimeout(()=>refreshCommentCountsV35(), 200);
+      return result;
+    };
+  }
+  if(typeof window.addManualCourse === 'function'){
+    const oldAddManualCourseV35 = window.addManualCourse;
+    window.addManualCourse = function(){
+      const result = oldAddManualCourseV35.apply(this, arguments);
+      setTimeout(()=>refreshCommentCountsV35(), 150);
+      return result;
+    };
+  }
+})();
+</script>
+</body>''')
 
 
 def render_page(content, script=""):

@@ -1429,6 +1429,38 @@ BASE_HTML = r"""
     .section-chip .section-meta { color:#475569 !important; }
     @media (max-width: 1100px) { .builder-top, .bottom-hub-tracker { width:100% !important; } }
 
+  
+
+    /* v21: always-on autosave + cleaner schedules page */
+    .autosave-strip {
+      display:flex; align-items:center; gap:8px;
+      margin-top:8px; padding:8px 10px; border-radius:12px;
+      background:#f0fdf4; border:1px solid #bbf7d0; color:#14532d;
+      font-size:13px; font-weight:750;
+    }
+    .autosave-dot { width:9px; height:9px; border-radius:999px; background:#22c55e; display:inline-block; box-shadow:0 0 0 3px rgba(34,197,94,.12); }
+    .autosave-strip.saving { background:#fffbeb; border-color:#fde68a; color:#92400e; }
+    .autosave-strip.saving .autosave-dot { background:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.14); }
+    .autosave-strip.saved { animation: autosavePulse .65s ease; }
+    @keyframes autosavePulse { 0%{box-shadow:0 0 0 0 rgba(34,197,94,.35);} 100%{box-shadow:0 0 0 10px rgba(34,197,94,0);} }
+    .major-picker-shell { background:#fff; border:1px solid #dbe4f0; border-radius:12px; padding:8px; }
+    .settings-label { font-size:12px; font-weight:900; color:#334155; margin-bottom:6px; text-transform:uppercase; letter-spacing:.04em; }
+    #majorCheckboxGrid.major-checkbox-grid { margin-top:0; border:0; padding:0; background:transparent; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); }
+    .schedule-browser { display:grid; grid-template-columns:260px minmax(0,1fr); gap:14px; align-items:start; }
+    .schedule-filter-panel { position:sticky; top:calc(var(--header-h) + 10px); background:#f8fafc; border:1px solid var(--line); border-radius:16px; padding:12px; box-shadow:var(--shadow); }
+    .schedule-results-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(360px,1fr)); gap:12px; }
+    .schedule-card.compact { margin:0; padding:12px; border-radius:16px; background:linear-gradient(135deg,#ffffff,#f8fbff); }
+    .schedule-card.compact h3 { margin:0 0 4px; font-size:17px; }
+    .schedule-meta-row { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 8px; }
+    .schedule-meta-pill { font-size:11px; font-weight:800; color:#334155; background:#eaf3ff; border:1px solid #bfdbfe; border-radius:999px; padding:3px 7px; }
+    .schedule-year-block { margin-top:8px; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; background:#fff; }
+    .schedule-year-title { padding:7px 9px; font-weight:900; font-size:12px; color:#1e293b; background:#f1f5f9; border-bottom:1px solid #e2e8f0; }
+    .schedule-term-mini { padding:7px 9px; border-bottom:1px solid #f1f5f9; }
+    .schedule-term-mini:last-child { border-bottom:0; }
+    .schedule-term-mini b { display:block; font-size:12px; color:#334155; margin-bottom:3px; }
+    .mini-course-line { display:inline-block; font-size:11px; font-weight:750; color:#0f172a; background:#f8fafc; border:1px solid #e2e8f0; border-radius:999px; padding:2px 6px; margin:2px 3px 2px 0; }
+    @media(max-width:900px){.schedule-browser{grid-template-columns:1fr}.schedule-filter-panel{position:static}.schedule-results-grid{grid-template-columns:1fr}}
+
   </style>
 </head>
 <body>
@@ -1597,7 +1629,10 @@ BUILD_CONTENT = r"""
       <h2>My Schedule Settings</h2>
       <div class="settings-grid">
         <input id="scheduleTitle" value="My Four-Year Plan" placeholder="Schedule title">
-        <select id="scheduleMajor" multiple size="4" onchange="majorChanged()"></select>
+        <div class="major-picker-shell">
+          <div class="settings-label">Majors</div>
+          <select id="scheduleMajor" multiple size="4" onchange="majorChanged()"></select>
+        </div>
       </div>
       <textarea id="scheduleComments" placeholder="Schedule notes">Built in the unified Flask schedule builder.</textarea>
       <div class="hub-check-panel">
@@ -1605,10 +1640,9 @@ BUILD_CONTENT = r"""
         <p class="muted">Checked means fulfilled by assigned Hub Elective cards. Unchecked units are saved as <code>hub_unfulfilled</code>.</p>
         <div id="hubChecklist" class="hub-check-grid"></div>
       </div>
-      <div class="button-row">
-        <button class="success" onclick="saveSchedule()">Save/Update My Schedule</button>
-        <button class="secondary" onclick="loadMySchedule()">Load My Existing Schedule</button>
-        <button class="secondary" onclick="loadRequiredPlan()">Refresh Required List</button>
+      <div class="autosave-strip">
+        <span class="autosave-dot" id="autosaveDot"></span>
+        <span id="autosaveText">Autosaving degree plan to server when changes happen.</span>
       </div>
     </div>
   </section>
@@ -2807,8 +2841,8 @@ function setupAutoBackendSaveV19(){
   if(window.__autoBackendSaveV19)return; window.__autoBackendSaveV19=true;
   let timer=null;
   const root=document.querySelector('.builder-page'); if(!root)return;
-  root.addEventListener('change',()=>{ clearTimeout(timer); timer=setTimeout(()=>{ saveLocalDegreeDraft(); },250); });
-  root.addEventListener('input',()=>{ clearTimeout(timer); timer=setTimeout(()=>{ saveLocalDegreeDraft(); },250); });
+  root.addEventListener('change',()=>{ clearTimeout(timer); timer=setTimeout(()=>{ saveLocalDegreeDraft(); queueServerAutosaveV20?.(); },180); });
+  root.addEventListener('input',()=>{ clearTimeout(timer); timer=setTimeout(()=>{ saveLocalDegreeDraft(); queueServerAutosaveV20?.(); },260); });
 }
 
 
@@ -2890,14 +2924,32 @@ saveHubModalUnits=function(){ originalSaveHubModalUnitsV20(); queueServerAutosav
 let SERVER_AUTOSAVE_TIMER_V20=null;
 async function silentSaveScheduleToServerV20(){
   if(!document.getElementById('termGrid')) return;
+  const strip=document.getElementById('autosaveText');
+  const wrap=document.querySelector('.autosave-strip');
   try{
     const schedule=buildScheduleJson();
     if(!schedule.title || !schedule.terms) return;
+    if(strip) strip.textContent='Saving degree plan to server...';
+    if(wrap){ wrap.classList.add('saving'); wrap.classList.remove('saved'); }
     const res=await fetch('/proxy/api/schedules',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(schedule)});
-    if(res.ok){ localStorage.setItem('degreeSchedulePulledAt', new Date().toISOString()); }
-  }catch(err){ console.warn('Background schedule save skipped', err); }
+    if(res.ok){
+      localStorage.setItem('degreeSchedulePulledAt', new Date().toISOString());
+      if(strip) strip.textContent='Saved to server and local browser cache.';
+      if(wrap){ wrap.classList.remove('saving'); wrap.classList.add('saved'); setTimeout(()=>wrap.classList.remove('saved'),800); }
+    } else if(res.status===401){
+      if(strip) strip.textContent='Saved locally. Log in to sync to server.';
+      if(wrap) wrap.classList.remove('saving');
+    } else {
+      if(strip) strip.textContent='Saved locally. Server sync will retry after changes.';
+      if(wrap) wrap.classList.remove('saving');
+    }
+  }catch(err){
+    console.warn('Background schedule save skipped', err);
+    if(strip) strip.textContent='Saved locally. Server sync unavailable.';
+    if(wrap) wrap.classList.remove('saving');
+  }
 }
-function queueServerAutosaveV20(){ clearTimeout(SERVER_AUTOSAVE_TIMER_V20); SERVER_AUTOSAVE_TIMER_V20=setTimeout(silentSaveScheduleToServerV20, 1200); }
+function queueServerAutosaveV20(){ clearTimeout(SERVER_AUTOSAVE_TIMER_V20); SERVER_AUTOSAVE_TIMER_V20=setTimeout(silentSaveScheduleToServerV20, 650); }
 const originalSaveLocalDegreeDraftV20 = saveLocalDegreeDraft;
 saveLocalDegreeDraft = function(){ originalSaveLocalDegreeDraftV20(); queueServerAutosaveV20(); setupHubChecklist(getUnfulfilledHubUnits()); };
 const originalAddManualCourseV20=addManualCourse;
@@ -3486,91 +3538,113 @@ window.addEventListener("load", () => {
 """
 
 SCHEDULES_CONTENT = r"""
-<section>
-  <h2>View Student Schedules</h2>
-  <div class="grid-3">
+<div class="schedule-browser">
+  <aside class="schedule-filter-panel">
+    <h2>Student Schedules</h2>
+    <p class="muted">Browse public degree plans by major, student, term, or course.</p>
     <select id="filterMajor"></select>
-    <input id="filterText" placeholder="Filter by student, course, comment, semester...">
-    <button onclick="loadSchedules()">Load / Filter Schedules</button>
-  </div>
-</section>
-
-<section>
-  <h2>Results</h2>
-  <div id="scheduleResults" class="scrollbox" style="max-height: none; padding: 10px;">Click Load / Filter Schedules.</div>
-</section>
-
+    <input id="filterText" placeholder="Search student, course, term...">
+    <button onclick="loadSchedules()">Refresh Schedules</button>
+  </aside>
+  <section>
+    <div id="scheduleResults" class="schedule-results-grid"><div class="muted">Loading schedules...</div></div>
+  </section>
+</div>
 """
 
 SCHEDULES_SCRIPT = r"""
 <script>
+const SCHEDULE_TERM_ORDER = [
+  'Transferred Courses',
+  'Freshman Fall','Freshman Spring','Freshman Summer',
+  'Sophomore Fall','Sophomore Spring','Sophomore Summer',
+  'Junior Fall','Junior Spring','Junior Summer',
+  'Senior Fall','Senior Spring','Senior Summer'
+];
+function scheduleYearBucket(term){
+  const t=String(term||'');
+  if(t.includes('Transferred')) return 'Transferred / AP';
+  if(t.includes('Freshman')) return 'Freshman';
+  if(t.includes('Sophomore')) return 'Sophomore';
+  if(t.includes('Junior')) return 'Junior';
+  if(t.includes('Senior')) return 'Senior';
+  return 'Custom / Other';
+}
 function setupScheduleFilters() {
-  const major = document.getElementById("filterMajor");
+  const major = document.getElementById('filterMajor');
   major.innerHTML = `<option value="">All majors</option>`;
   Object.keys(MAJOR_DATA).forEach(m => {
-    const opt = document.createElement("option");
+    const opt = document.createElement('option');
     opt.value = m;
     opt.textContent = m;
     major.appendChild(opt);
   });
+  document.getElementById('filterText').addEventListener('input', () => loadSchedules(false));
+  document.getElementById('filterMajor').addEventListener('change', () => loadSchedules(false));
 }
-
-async function loadSchedules() {
-  const result = await api("GET", "/api/schedules");
-  const schedules = result.data?.data || result.data || [];
-  renderSchedules(Array.isArray(schedules) ? schedules : []);
+let LAST_SCHEDULES=[];
+async function loadSchedules(fetchFresh=true) {
+  if(fetchFresh || !LAST_SCHEDULES.length){
+    const result = await api('GET', '/api/schedules', null, {silent:true});
+    const schedules = result.data?.data || result.data || [];
+    LAST_SCHEDULES = Array.isArray(schedules) ? schedules : [];
+  }
+  renderSchedules(LAST_SCHEDULES);
 }
-
+function scheduleMatchesMajor(s, majorFilter){
+  if(!majorFilter) return true;
+  const majors = Array.isArray(s.majors) ? s.majors : [s.major];
+  return majors.map(x=>String(x||'').toLowerCase()).includes(majorFilter);
+}
 function renderSchedules(schedules) {
-  const majorFilter = document.getElementById("filterMajor").value.toLowerCase();
-  const text = document.getElementById("filterText").value.toLowerCase();
-  const container = document.getElementById("scheduleResults");
-  container.innerHTML = "";
-
+  const majorFilter = document.getElementById('filterMajor').value.toLowerCase();
+  const text = document.getElementById('filterText').value.toLowerCase();
+  const container = document.getElementById('scheduleResults');
+  container.innerHTML = '';
   const filtered = schedules.filter(s => {
     const haystack = JSON.stringify(s).toLowerCase();
-    const okMajor = !majorFilter || String(s.major || "").toLowerCase() === majorFilter;
-    const okText = !text || haystack.includes(text);
-    return okMajor && okText;
+    return scheduleMatchesMajor(s, majorFilter) && (!text || haystack.includes(text));
   });
-
-  if (!filtered.length) {
-    container.innerHTML = `<div class="muted">No matching schedules found.</div>`;
-    return;
-  }
-
+  if (!filtered.length) { container.innerHTML = `<div class="muted">No matching schedules found.</div>`; return; }
   filtered.forEach(s => {
-    const card = document.createElement("div");
-    card.className = "schedule-card";
-    const creator = s.creator?.displayName || s.creator?.email || "Unknown student";
+    const card = document.createElement('article');
+    card.className = 'schedule-card compact';
+    const creator = s.creator?.displayName || s.creator?.email || 'Unknown student';
+    const majors = Array.isArray(s.majors) && s.majors.length ? s.majors : [s.major || 'Unspecified'];
     const terms = s.terms || {};
-    const termHtml = Object.entries(terms).map(([term, courses]) => {
-      const list = (courses || []).map(c => `<li>${escapeHtml(c.course_code)} ${c.status ? `<span class="muted">(${escapeHtml(c.status)})</span>` : ""}</li>`).join("");
-      return `<div class="term-summary"><b>${escapeHtml(term)}</b><ul>${list || "<li class='muted'>No courses</li>"}</ul></div>`;
-    }).join("");
-
+    const entries = Object.entries(terms).sort(([a],[b]) => {
+      const ia=SCHEDULE_TERM_ORDER.indexOf(a), ib=SCHEDULE_TERM_ORDER.indexOf(b);
+      return (ia<0?999:ia)-(ib<0?999:ib) || a.localeCompare(b);
+    });
+    const buckets = {};
+    entries.forEach(([term,courses]) => { const b=scheduleYearBucket(term); (buckets[b] ||= []).push([term,courses||[]]); });
+    const bucketHtml = Object.entries(buckets).map(([bucket, list]) => `
+      <div class="schedule-year-block">
+        <div class="schedule-year-title">${escapeHtml(bucket)}</div>
+        ${list.map(([term,courses]) => `
+          <div class="schedule-term-mini">
+            <b>${escapeHtml(term)}</b>
+            ${(courses||[]).slice(0,10).map(c=>`<span class="mini-course-line">${escapeHtml(c.course_code || '')}</span>`).join('') || `<span class="muted">No courses</span>`}
+            ${(courses||[]).length>10 ? `<span class="mini-course-line">+${(courses||[]).length-10} more</span>` : ''}
+          </div>`).join('')}
+      </div>`).join('');
     card.innerHTML = `
-      <h3>${escapeHtml(s.title || "Untitled Schedule")}</h3>
-      <div class="muted">Student: ${escapeHtml(creator)} | Major: ${escapeHtml(s.major || "Unspecified")}</div>
-      <p>${escapeHtml(s.comments || "")}</p>
-      <div class="schedule-terms">${termHtml}</div>
+      <h3>${escapeHtml(s.title || 'Untitled Schedule')}</h3>
+      <div class="schedule-meta-row">
+        <span class="schedule-meta-pill">${escapeHtml(creator)}</span>
+        ${majors.map(m=>`<span class="schedule-meta-pill">${escapeHtml(m)}</span>`).join('')}
+      </div>
+      ${s.comments ? `<p class="muted">${escapeHtml(s.comments)}</p>` : ''}
+      ${bucketHtml}
     `;
     container.appendChild(card);
   });
 }
-
-function escapeHtml(str) {
-  return String(str || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-window.addEventListener("load", setupScheduleFilters);
+function escapeHtml(str) { return String(str || '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
+window.addEventListener('load', () => { setupScheduleFilters(); loadSchedules(); });
 </script>
 """
+
 
 
 def render_page(content, script=""):

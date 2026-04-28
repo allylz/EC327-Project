@@ -4956,6 +4956,5 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
 </body>''')
 
 if __name__ == "__main__":
-    print("31")
     port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", debug=True, port=port)

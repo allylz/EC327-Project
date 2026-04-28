@@ -610,116 +610,165 @@ BASE_HTML = r"""
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     :root {
-      --bg: #f4f6fa;
+      --bg: #f8fafc;
       --panel: #ffffff;
-      --ink: #111827;
-      --muted: #6b7280;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
       --blue: #2563eb;
       --blue-dark: #1d4ed8;
       --green: #059669;
       --red: #dc2626;
-      --border: #d1d5db;
-      --soft: #eef2ff;
-      --purple: #ede9fe;
-      --yellow: #fff7ed;
+      --amber: #f59e0b;
+      --soft-blue: #eff6ff;
+      --soft-green: #ecfdf5;
+      --soft-purple: #f5f3ff;
+      --soft-yellow: #fffbeb;
+      --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
     }
 
     * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
       background: var(--bg);
       color: var(--ink);
     }
 
     header {
-      background: #111827;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0f172a;
       color: white;
-      padding: 16px 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
     }
 
-    header h1 {
-      margin: 0 0 8px 0;
-      font-size: 24px;
+    .header-inner {
+      width: 100%;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    .brand .subtitle {
+      color: #cbd5e1;
+      font-size: 12px;
     }
 
     nav {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
       align-items: center;
+      justify-content: flex-end;
     }
 
     nav a, nav button {
       color: white;
-      background: #374151;
+      background: rgba(255,255,255,0.10);
       text-decoration: none;
-      padding: 9px 12px;
-      border-radius: 8px;
-      border: none;
+      padding: 8px 11px;
+      border-radius: 7px;
+      border: 1px solid rgba(255,255,255,0.12);
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
+      font-weight: 700;
+      width: auto;
+      margin: 0;
     }
 
     nav a:hover, nav button:hover {
-      background: #4b5563;
+      background: rgba(255,255,255,0.18);
+    }
+
+    .hello-pill {
+      color: #e2e8f0;
+      font-size: 13px;
+      padding: 8px 10px;
+      background: rgba(15, 23, 42, 0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 7px;
+      max-width: 280px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     main {
-      padding: 10px;
+      padding: 12px;
       max-width: none;
       width: 100%;
       margin: 0;
-      box-sizing: border-box;
     }
 
     section, .panel {
       background: var(--panel);
-      border-radius: 12px;
-      padding: 12px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px;
+      box-shadow: var(--shadow);
       margin-bottom: 12px;
     }
 
-    h2 { margin: 0 0 8px; font-size: 18px; }
-    h3 { margin: 8px 0 6px; font-size: 14px; }
+    h2 { margin: 0 0 10px; font-size: 18px; letter-spacing: -0.01em; }
+    h3 { margin: 10px 0 6px; font-size: 14px; }
+    label { font-size: 12px; color: #475569; font-weight: 700; }
 
     input, textarea, button, select {
       width: 100%;
-      padding: 7px 8px;
+      padding: 8px 9px;
       margin: 4px 0;
-      border-radius: 8px;
-      border: 1px solid var(--border);
+      border-radius: 7px;
+      border: 1px solid var(--line);
       font-size: 14px;
+      background: white;
     }
 
-    textarea { min-height: 54px; resize: vertical; }
+    textarea { min-height: 58px; resize: vertical; }
 
     button {
       background: var(--blue);
       color: white;
-      font-weight: bold;
+      font-weight: 800;
       border: none;
       cursor: pointer;
     }
 
     button:hover { background: var(--blue-dark); }
-    button.secondary { background: #4b5563; }
+    button.secondary { background: #475569; }
     button.success { background: var(--green); }
     button.danger { background: var(--red); }
-    button.small { width: auto; padding: 6px 9px; font-size: 12px; margin: 3px; }
+    button.small { width: auto; padding: 5px 8px; font-size: 11px; margin: 2px; }
 
     .grid-2 {
       display: grid;
-      grid-template-columns: 380px 1fr;
-      gap: 18px;
+      grid-template-columns: minmax(300px, 420px) 1fr;
+      gap: 14px;
+      align-items: start;
     }
 
     .grid-3 {
       display: grid;
-      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      grid-template-columns: 260px 1fr 190px;
       gap: 10px;
+      align-items: end;
     }
 
     .builder-page {
@@ -729,12 +778,9 @@ BASE_HTML = r"""
       margin-right: calc(50% - 50vw + 12px);
     }
 
-    .builder-top {
-      margin-bottom: 10px;
-    }
+    .builder-top { margin-bottom: 10px; }
 
     .builder-workspace {
-      display: block;
       width: 100%;
       padding-right: 392px;
       box-sizing: border-box;
@@ -744,7 +790,7 @@ BASE_HTML = r"""
 
     .required-side {
       position: fixed;
-      top: 82px;
+      top: 78px;
       right: 10px;
       width: 360px;
       max-width: calc(100vw - 24px);
@@ -763,7 +809,7 @@ BASE_HTML = r"""
       width: 38px;
       min-width: 38px;
       height: 44px;
-      border-radius: 10px 0 0 10px;
+      border-radius: 8px 0 0 8px;
       padding: 0;
       font-size: 11px;
       writing-mode: vertical-rl;
@@ -772,21 +818,18 @@ BASE_HTML = r"""
     }
 
     .hub-check-panel {
-      border: 1px solid var(--border);
-      border-radius: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
       padding: 10px;
-      background: #f9fafb;
+      background: #f8fafc;
       margin-top: 8px;
     }
 
-    .hub-check-panel h3 {
-      margin: 0 0 4px;
-      font-size: 15px;
-    }
+    .hub-check-panel h3 { margin: 0 0 4px; font-size: 15px; }
 
     .hub-check-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
       gap: 6px;
       margin-top: 8px;
     }
@@ -794,87 +837,44 @@ BASE_HTML = r"""
     .hub-check-grid label {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 7px;
       padding: 6px 8px;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
       background: white;
       font-size: 12px;
+      font-weight: 600;
     }
 
-    .hub-check-grid input {
-      width: auto;
-      margin: 0;
-    }
+    .hub-check-grid input { width: auto; margin: 0; }
 
     .settings-grid {
       display: grid;
-      grid-template-columns: 1.3fr 1fr;
+      grid-template-columns: 1.35fr 1fr;
       gap: 10px;
       align-items: center;
     }
 
     .add-course-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      grid-template-columns: repeat(4, minmax(170px, 1fr));
       gap: 8px;
       align-items: end;
     }
 
     .semester-control-row {
       display: grid;
-      grid-template-columns: 220px 1fr 180px;
+      grid-template-columns: 220px 1fr 170px;
       gap: 8px;
       align-items: center;
     }
 
-    .button-row {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 6px;
-    }
+    .button-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+    .button-row button { width: auto; min-width: 145px; }
 
-    .button-row button {
-      width: auto;
-      min-width: 150px;
-    }
-
-    .check-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0;
-      padding: 8px 10px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: #f9fafb;
-      font-size: 13px;
-      white-space: nowrap;
-    }
-
-    .check-row input {
-      width: auto;
-      margin: 0;
-    }
-
-    .compact-section {
-      margin-bottom: 10px;
-    }
-
+    .compact-section { margin-bottom: 10px; }
     .muted { color: var(--muted); font-size: 13px; }
-    .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #e5e7eb; font-size: 12px; margin: 3px; }
-
-    .response-box {
-      background: #111827;
-      color: #d1fae5;
-      padding: 12px;
-      border-radius: 10px;
-      overflow: auto;
-      max-height: 360px;
-      font-size: 12px;
-      white-space: pre-wrap;
-    }
+    .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #e2e8f0; font-size: 12px; margin: 3px; }
 
     .term-grid {
       display: grid;
@@ -885,30 +885,25 @@ BASE_HTML = r"""
     }
 
     .term-box {
-      min-height: 92px;
-      border: 2px dashed #cbd5e1;
-      border-radius: 12px;
-      padding: 8px;
-      background: #f9fafb;
+      min-height: 96px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: #f8fafc;
       box-sizing: border-box;
       display: flex;
       flex-wrap: wrap;
       align-items: flex-start;
-      gap: 7px;
+      gap: 8px;
       width: 100%;
     }
 
-    .palette-box {
-      min-height: 70px;
-    }
-
-    .term-box.special {
-      background: #fefce8;
-      border-color: #facc15;
-    }
+    .palette-box { min-height: 74px; }
+    .term-box.special { background: var(--soft-yellow); border-color: #fcd34d; }
 
     .term-title {
-      font-weight: bold;
+      font-weight: 900;
+      color: #1e293b;
       margin-bottom: 2px;
       display: flex;
       align-items: center;
@@ -916,149 +911,116 @@ BASE_HTML = r"""
       gap: 8px;
       flex: 0 0 100%;
       width: 100%;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #e2e8f0;
     }
 
     .course-card {
-      background: #e0ecff;
-      border: 1px solid #93c5fd;
-      border-radius: 9px;
-      padding: 6px 7px;
+      background: white;
+      border: 1px solid #bfdbfe;
+      border-left: 4px solid var(--blue);
+      border-radius: 8px;
+      padding: 8px;
       margin: 0;
       cursor: grab;
       display: grid;
-      grid-template-columns: minmax(115px, 170px) minmax(150px, 1fr) auto;
-      gap: 7px;
-      align-items: center;
-      flex: 1 1 430px;
-      max-width: 100%;
-      min-width: min(100%, 300px);
+      grid-template-rows: auto auto auto;
+      gap: 6px;
+      flex: 0 0 285px;
+      width: 285px;
+      max-width: 285px;
+      min-height: 118px;
       box-sizing: border-box;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
     }
 
-    .course-actions {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-      gap: 4px;
+    .course-card .code { font-weight: 900; font-size: 14px; color: #0f172a; }
+    .course-card .detail { color: #475569; font-size: 12px; line-height: 1.25; }
+    .comment-text { display: inline-block; max-height: 36px; overflow: auto; }
+
+    .course-card.completed {
+      background: var(--soft-green);
+      border-color: #86efac;
+      border-left-color: var(--green);
     }
 
-    .card-choice-wrap {
-      margin-top: 5px;
+    .course-card.placeholder {
+      background: var(--soft-purple);
+      border-color: #c4b5fd;
+      border-left-color: #7c3aed;
     }
 
-    .card-choice-wrap label {
-      display: block;
-      font-size: 11px;
-      color: #4b5563;
-      margin-bottom: 2px;
-    }
+    .course-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 5px; }
 
-    .card-choice {
-      margin: 0;
-      padding: 5px 7px;
-      font-size: 12px;
-      background: white;
-      max-width: 100%;
-    }
+    .card-choice-wrap { margin-top: 5px; }
+    .card-choice-wrap label { display: block; font-size: 11px; color: #475569; margin-bottom: 2px; }
+    .card-choice { margin: 0; padding: 5px 7px; font-size: 12px; background: white; max-width: 100%; }
 
     .completed-toggle {
       display: inline-flex;
       align-items: center;
       gap: 4px;
       font-size: 12px;
-      color: #374151;
+      color: #334155;
       white-space: nowrap;
     }
 
-    .completed-toggle input {
-      width: auto;
-      margin: 0;
-    }
-
-    .course-actions {
-      display: flex;
-      gap: 6px;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-    }
+    .completed-toggle input { width: auto; margin: 0; }
 
     .required-bank {
-      max-height: calc(100vh - 108px);
+      max-height: calc(100vh - 104px);
       overflow: auto;
-      border: 1px solid var(--border);
-      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+      border: 1px solid var(--line);
+      box-shadow: 0 14px 32px rgba(15, 23, 42, 0.14);
     }
 
-    .required-group-title {
-      margin: 10px 0 3px;
-      font-weight: bold;
-      font-size: 13px;
-      color: #374151;
+    .required-group-title { margin: 10px 0 4px; font-weight: 900; font-size: 13px; color: #334155; }
+
+    .required-bank .course-card {
+      width: 100%;
+      max-width: 100%;
+      flex-basis: auto;
+      min-height: 100px;
+      margin-bottom: 7px;
     }
 
-    .course-card.completed {
-      background: #dcfce7;
-      border-color: #86efac;
-    }
-
-    .course-card.placeholder {
-      background: #ede9fe;
-      border-color: #c4b5fd;
-    }
-
-    .course-card .code {
-      font-weight: bold;
-    }
-
-    .course-card .detail {
-      color: #374151;
-      font-size: 12px;
-      margin-top: 3px;
-    }
-
-    .result-item {
-      border-bottom: 1px solid #e5e7eb;
-      padding: 9px;
-      cursor: pointer;
-    }
-
-    .result-item:hover { background: #f3f4f6; }
+    .result-item { border-bottom: 1px solid #e5e7eb; padding: 9px; cursor: pointer; }
+    .result-item:hover { background: #f1f5f9; }
 
     .scrollbox {
-      max-height: 220px;
+      max-height: 240px;
       overflow: auto;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background: #fafafa;
-    }
-
-    .schedule-card {
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 12px;
-      margin: 10px 0;
-      background: white;
-    }
-
-    .schedule-terms {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(220px, 1fr));
-      gap: 8px;
-      margin-top: 8px;
-    }
-
-    .term-summary {
-      background: #f9fafb;
+      border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 8px;
+      background: #ffffff;
+    }
+
+    .schedule-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 10px 0; background: white; box-shadow: var(--shadow); }
+    .schedule-terms { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 8px; margin-top: 8px; }
+    .term-summary { background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 13px; }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      background: #0f172a;
+      color: white;
+      padding: 10px 14px;
+      border-radius: 8px;
+      box-shadow: 0 12px 28px rgba(15,23,42,0.25);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      z-index: 200;
+      max-width: min(680px, calc(100vw - 24px));
       font-size: 13px;
     }
 
+    .toast.visible { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
     @media (max-width: 1150px) {
-      .builder-workspace, .settings-grid, .add-course-grid, .semester-control-row {
-        grid-template-columns: 1fr;
-      }
+      .builder-workspace, .settings-grid, .add-course-grid, .semester-control-row { grid-template-columns: 1fr; }
       .builder-workspace { padding-right: 0; }
       .required-side { position: static; width: auto; max-width: none; transform: none !important; }
       .required-toggle { display: none; }
@@ -1067,31 +1029,34 @@ BASE_HTML = r"""
     }
 
     @media (max-width: 900px) {
-      .grid-2, .grid-3, .term-grid, .schedule-terms {
-        grid-template-columns: 1fr;
-      }
-
-      .course-card {
-        grid-template-columns: 1fr;
-      }
+      .grid-2, .grid-3, .schedule-terms { grid-template-columns: 1fr; }
+      .header-inner { align-items: flex-start; flex-direction: column; }
+      nav { justify-content: flex-start; }
+      .course-card { flex-basis: 260px; width: 260px; max-width: 260px; }
     }
   </style>
 </head>
 <body>
 <header>
-  <h1>BU Course Scheduler</h1>
-  <nav>
-    <a href="/login">Login</a>
-    <a href="/build">Build My Schedule</a>
-    <a href="/schedules">View Student Schedules</a>
-    <button onclick="quickMe()">Current User</button>
-    <span class="pill" id="cookieStatus">Checking session...</span>
-  </nav>
+  <div class="header-inner">
+    <div class="brand">
+      <h1>BU Course Scheduler</h1>
+      <div class="subtitle">Plan courses, compare student schedules, and track requirements.</div>
+    </div>
+    <nav>
+      <span class="hello-pill" id="helloUser">Hello, guest</span>
+      <a href="/build">Build My Schedule</a>
+      <a href="/schedules">View Schedules</a>
+      <a href="/login" id="loginRegisterLink">Login / Register</a>
+      <button id="navLogoutBtn" onclick="logoutFromNav()" style="display:none;">Logout</button>
+    </nav>
+  </div>
 </header>
 
 <main>
   {{ content|safe }}
 </main>
+<div id="toast" class="toast"></div>
 
 <script>
 const MAJOR_DATA = {{ major_data|safe }};
@@ -1107,10 +1072,34 @@ const HUB_UNITS = [
   "Ethical Reasoning (ETR)"
 ];
 
+let CURRENT_USER = null;
+let toastTimer = null;
+
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add("visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("visible"), 3200);
+}
+
+function summarizeApiResult(status, data) {
+  if (data && typeof data === "object") {
+    if (data.message) return data.message;
+    if (data.error) return data.error;
+    if (data.user) return `Logged in as ${data.user.displayName || data.user.email}`;
+    if (data.schedule) return "Schedule loaded.";
+    if (Array.isArray(data)) return `Loaded ${data.length} item(s).`;
+    if (typeof data.count === "number") return `Found ${data.count} result(s).`;
+  }
+  return status >= 200 && status < 300 ? "Request successful." : `Request failed (${status}).`;
+}
+
 function showResponse(data, boxId="responseBox") {
-  const box = document.getElementById(boxId);
-  if (!box) return;
-  box.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  // Kept for compatibility with older page scripts, but the UI no longer shows raw debug panels.
+  if (data && typeof data === "object" && "status" in data) showToast(summarizeApiResult(data.status, data.data));
+  else showToast(typeof data === "string" ? data : "Done.");
 }
 
 async function api(method, path, body=null) {
@@ -1120,25 +1109,55 @@ async function api(method, path, body=null) {
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); } catch { data = text; }
-  showResponse({status: res.status, data});
-  await checkSession(false);
+  showToast(summarizeApiResult(res.status, data));
+  await updateHeaderAuth();
   return {status: res.status, data};
 }
 
+async function updateHeaderAuth() {
+  let user = null;
+  try {
+    const res = await fetch("/proxy/api/auth/me", {credentials:"same-origin"});
+    const data = await res.json();
+    user = data.user || null;
+  } catch (err) {
+    user = null;
+  }
+
+  CURRENT_USER = user;
+  const hello = document.getElementById("helloUser");
+  const link = document.getElementById("loginRegisterLink");
+  const logout = document.getElementById("navLogoutBtn");
+
+  if (user) {
+    const name = user.displayName || user.email || "student";
+    if (hello) hello.textContent = `Hello, ${name}`;
+    if (link) link.style.display = "none";
+    if (logout) logout.style.display = "inline-block";
+  } else {
+    if (hello) hello.textContent = "Hello, guest";
+    if (link) link.style.display = "inline-block";
+    if (logout) logout.style.display = "none";
+  }
+}
+
+async function logoutFromNav() {
+  await api("POST", "/api/auth/logout");
+  await fetch("/clear-session", {method:"POST", credentials:"same-origin"});
+  await updateHeaderAuth();
+  showToast("Logged out.");
+}
+
 async function checkSession(show=false) {
-  const res = await fetch("/session-status", {credentials:"same-origin"});
-  const data = await res.json();
-  const el = document.getElementById("cookieStatus");
-  if (el) el.textContent = data.hasBackendCookies ? "Logged-in cookie stored" : "No login cookie stored";
-  if (show) showResponse(data);
-  return data;
+  return updateHeaderAuth();
 }
 
 async function quickMe() {
-  await api("GET", "/api/auth/me");
+  const result = await api("GET", "/api/auth/me");
+  return result;
 }
 
-window.addEventListener("load", () => checkSession(false));
+window.addEventListener("load", () => updateHeaderAuth());
 </script>
 
 {{ script|safe }}
@@ -1155,7 +1174,6 @@ LOGIN_CONTENT = r"""
       <input id="loginPassword" type="password" placeholder="password">
       <button onclick="loginUser()">Login</button>
       <button class="secondary" onclick="logoutUser()">Logout</button>
-      <button class="secondary" onclick="quickMe()">Get Current User</button>
     </section>
 
     <section>
@@ -1186,10 +1204,6 @@ LOGIN_CONTENT = r"""
       <button class="success" onclick="resetPassword()">Reset Password</button>
     </section>
 
-    <section>
-      <h2>Response</h2>
-      <pre id="responseBox" class="response-box">No response yet.</pre>
-    </section>
   </div>
 </div>
 """
@@ -1236,16 +1250,15 @@ async function verifyEmail() {
 
 async function loginUser() {
   saveEmailFields();
-  await api("POST", "/api/auth/login", {
+  const result = await api("POST", "/api/auth/login", {
     email: document.getElementById("loginEmail").value.trim(),
     password: document.getElementById("loginPassword").value
   });
+  if (result.status === 200) setTimeout(() => { window.location.href = "/build"; }, 500);
 }
 
 async function logoutUser() {
-  await api("POST", "/api/auth/logout");
-  await fetch("/clear-session", {method:"POST", credentials:"same-origin"});
-  await checkSession(false);
+  await logoutFromNav();
 }
 
 async function forgotPassword() {
@@ -1286,7 +1299,6 @@ BUILD_CONTENT = r"""
         <button class="success" onclick="saveSchedule()">Save/Update My Schedule</button>
         <button class="secondary" onclick="loadMySchedule()">Load My Existing Schedule</button>
         <button class="secondary" onclick="loadRequiredPlan()">Refresh Required List</button>
-        <button class="secondary" onclick="previewSchedule()">Preview JSON</button>
       </div>
     </div>
   </section>
@@ -1345,10 +1357,6 @@ BUILD_CONTENT = r"""
         <div id="termGrid" class="term-grid"></div>
       </section>
 
-      <section class="compact-section">
-        <h2>Response</h2>
-        <pre id="responseBox" class="response-box">No response yet.</pre>
-      </section>
     </div>
 
     <aside class="required-side" id="requiredPanel">
@@ -1703,7 +1711,7 @@ function makeCourseCard(course) {
         <input type="checkbox" ${card.dataset.transferred === "true" ? "checked" : ""} onchange="toggleTransferred(event, this)">
         Transferred
       </label>
-      <button class="small success" onclick="markTransferred(event, this)">Move to Transferred</button>
+      <button class="small success" onclick="markTransferred(event, this)">Transfer</button>
       <button class="small danger" onclick="removeCard(event, this)">Remove</button>
     </div>
   `;
@@ -1812,7 +1820,8 @@ function buildScheduleJson() {
 }
 
 function previewSchedule() {
-  showResponse(buildScheduleJson());
+  navigator.clipboard?.writeText(JSON.stringify(buildScheduleJson(), null, 2));
+  showToast("Schedule JSON copied to clipboard.");
 }
 
 async function saveSchedule() {
@@ -1904,10 +1913,6 @@ SCHEDULES_CONTENT = r"""
   <div id="scheduleResults" class="scrollbox" style="max-height: none; padding: 10px;">Click Load / Filter Schedules.</div>
 </section>
 
-<section>
-  <h2>Response</h2>
-  <pre id="responseBox" class="response-box">No response yet.</pre>
-</section>
 """
 
 SCHEDULES_SCRIPT = r"""
@@ -1962,7 +1967,6 @@ function renderSchedules(schedules) {
       <div class="muted">Student: ${escapeHtml(creator)} | Major: ${escapeHtml(s.major || "Unspecified")}</div>
       <p>${escapeHtml(s.comments || "")}</p>
       <div class="schedule-terms">${termHtml}</div>
-      <button class="secondary" onclick='showResponse(${JSON.stringify(JSON.stringify(s, null, 2))})'>Show Raw JSON</button>
     `;
     container.appendChild(card);
   });

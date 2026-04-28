@@ -4997,7 +4997,7 @@ BASE_HTML = BASE_HTML.replace("</style>", r'''
 #saveLoadBoxV32 button{margin:0 !important;}
 #lastSaveTimestampV32{font-size:12px;color:#64748b;margin-top:6px;}
 .required-heading-v20 h2{margin-bottom:2px;}
-@media(max-width:850px){#degreeTopToolsV32{grid-template-columns:1fr !important;max-width:none !important;}}
+@media(max-width:850px){ #degreeTopToolsV32{grid-template-columns:1fr !important;max-width:none !important;}}
 </style>''')
 
 BASE_HTML = BASE_HTML.replace("</body>", r'''

@@ -3461,6 +3461,200 @@ window.addEventListener("load", () => { setTimeout(applyV20Ui, 400); });
   });
 })();
 
+
+
+/* v32: single-major dropdown + visible save/load under title; remove duplicate right-panel controls */
+(function(){
+  function firstNameFromUserV32(user){
+    if(!user) return 'My';
+    const raw = (user.displayName && String(user.displayName).trim()) || (user.email && String(user.email).trim()) || '';
+    if(!raw) return 'My';
+    const base = raw.split('@')[0].replace(/[._-]+/g,' ').trim();
+    return base.split(/\s+/)[0] || 'My';
+  }
+
+  async function fetchCurrentUserV32(){
+    try{
+      const res = await fetch('/proxy/api/auth/me', {credentials:'same-origin'});
+      const data = await res.json();
+      const user = data.user || data.data?.user || null;
+      window.CURRENT_USER = user;
+      if(user) localStorage.setItem('lastKnownUser', JSON.stringify(user));
+      return user;
+    }catch(e){
+      try { return JSON.parse(localStorage.getItem('lastKnownUser') || 'null'); } catch { return null; }
+    }
+  }
+
+  async function setDegreePlanTitleV32(){
+    const user = await fetchCurrentUserV32();
+    const name = firstNameFromUserV32(user);
+    const title = `${name}'s Degree Plan`;
+    const h = document.getElementById('degreePlanTitle');
+    const input = document.getElementById('scheduleTitle');
+    if(h) h.textContent = title;
+    if(input) input.value = title;
+    return title;
+  }
+  window.setDegreePlanTitleV32 = setDegreePlanTitleV32;
+
+  function makeSingleMajorDropdownV32(){
+    const select = document.getElementById('scheduleMajor');
+    if(!select) return;
+    select.removeAttribute('multiple');
+    select.removeAttribute('size');
+    select.size = 1;
+    select.classList.add('single-major-select-v32');
+
+    // Remove checkbox major UI if earlier patches created it.
+    document.querySelectorAll('#majorCheckboxGrid, .major-checkbox-grid').forEach(el => el.remove());
+
+    // Ensure options exist.
+    if(select.options.length === 0 && typeof MAJOR_DATA === 'object'){
+      Object.keys(MAJOR_DATA).forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        select.appendChild(opt);
+      });
+    }
+
+    select.onchange = function(){
+      if(typeof majorChanged === 'function') majorChanged();
+      if(typeof saveLocalDegreeDraft === 'function') saveLocalDegreeDraft();
+    };
+  }
+
+  window.getSelectedMajors = function(){
+    const sel = document.getElementById('scheduleMajor');
+    return sel && sel.value ? [sel.value] : [];
+  };
+
+  window.getPrimaryMajor = function(){
+    const sel = document.getElementById('scheduleMajor');
+    return (sel && sel.value) || (typeof MAJOR_DATA === 'object' ? Object.keys(MAJOR_DATA)[0] : '');
+  };
+
+  function removeDuplicateRightToolsV32(){
+    // These old blocks caused duplicate empty Majors and duplicate Save/Load widgets.
+    document.querySelectorAll('#scheduleToolsV25, #scheduleToolsV26, #majorToolsV25, #majorToolsV26, .schedule-tools-v25, .schedule-tools-v26, .major-tools-v25, .major-tools-v26').forEach(el => el.remove());
+  }
+
+  function ensureTopToolsV32(){
+    const title = document.getElementById('degreePlanTitle');
+    const select = document.getElementById('scheduleMajor');
+    if(!title || !select) return;
+
+    let shell = document.getElementById('degreeTopToolsV32');
+    if(!shell){
+      shell = document.createElement('div');
+      shell.id = 'degreeTopToolsV32';
+      shell.className = 'degree-top-tools-v32';
+      title.insertAdjacentElement('afterend', shell);
+    }
+
+    let majorBox = document.getElementById('majorDropdownBoxV32');
+    if(!majorBox){
+      majorBox = document.createElement('div');
+      majorBox.id = 'majorDropdownBoxV32';
+      majorBox.className = 'tool-card-v32';
+      majorBox.innerHTML = '<label>Major</label>';
+      shell.appendChild(majorBox);
+    }
+    if(!select.closest('#majorDropdownBoxV32')) majorBox.appendChild(select);
+
+    let actionBox = document.getElementById('saveLoadBoxV32');
+    if(!actionBox){
+      actionBox = document.createElement('div');
+      actionBox.id = 'saveLoadBoxV32';
+      actionBox.className = 'tool-card-v32 save-load-v32';
+      actionBox.innerHTML = `
+        <label>Saved plan</label>
+        <div class="button-row-v32">
+          <button type="button" onclick="saveScheduleV32()">Save</button>
+          <button type="button" class="secondary" onclick="loadMyScheduleV32()">Load saved</button>
+        </div>
+        <div id="lastSaveTimestampV32" class="muted last-save-v32">Last save: never</div>`;
+      shell.appendChild(actionBox);
+    }
+    updateLastSaveV32();
+    removeDuplicateRightToolsV32();
+  }
+
+  function updateLastSaveV32(){
+    const el = document.getElementById('lastSaveTimestampV32');
+    if(!el) return;
+    const iso = localStorage.getItem('degreeScheduleServerSaveAt') || localStorage.getItem('degreeScheduleDraftSavedAt');
+    el.textContent = iso ? `Last save: ${new Date(iso).toLocaleString()}` : 'Last save: never';
+  }
+  window.updateLastSaveV32 = updateLastSaveV32;
+
+  window.saveScheduleV32 = async function(){
+    if(typeof saveSchedule !== 'function') return;
+    await setDegreePlanTitleV32();
+    const result = await saveSchedule();
+    const now = new Date().toISOString();
+    localStorage.setItem('degreeScheduleServerSaveAt', now);
+    localStorage.setItem('degreeScheduleDraftSavedAt', now);
+    updateLastSaveV32();
+    return result;
+  };
+
+  window.loadMyScheduleV32 = async function(){
+    if(typeof loadMySchedule !== 'function') return;
+    const result = await loadMySchedule();
+    await setDegreePlanTitleV32();
+    updateLastSaveV32();
+    return result;
+  };
+
+  if(typeof buildScheduleJson === 'function'){
+    const prevBuildV32 = buildScheduleJson;
+    buildScheduleJson = function(){
+      const schedule = prevBuildV32();
+      const sel = document.getElementById('scheduleMajor');
+      schedule.major = sel ? sel.value : (schedule.major || '');
+      delete schedule.majors;
+      const h = document.getElementById('degreePlanTitle');
+      schedule.title = h ? h.textContent.trim() : (schedule.title || 'Degree Plan');
+      return schedule;
+    };
+  }
+
+  if(typeof renderSchedule === 'function'){
+    const prevRenderV32 = renderSchedule;
+    renderSchedule = function(schedule){
+      prevRenderV32(schedule);
+      makeSingleMajorDropdownV32();
+      const sel = document.getElementById('scheduleMajor');
+      if(sel && schedule && schedule.major) sel.value = schedule.major;
+      setTimeout(()=>{ ensureTopToolsV32(); removeDuplicateRightToolsV32(); setDegreePlanTitleV32(); }, 0);
+    };
+  }
+
+  const style = document.createElement('style');
+  style.textContent = `
+    #degreeTopToolsV32{display:grid;grid-template-columns:minmax(220px,1fr) minmax(260px,1fr);gap:12px;margin:12px 0 14px;max-width:760px;}
+    .tool-card-v32{background:#fff;border:1px solid #dbe4f0;border-radius:14px;padding:10px 12px;box-shadow:0 4px 14px rgba(15,23,42,.05);}
+    .tool-card-v32 label{display:block;font-size:12px;font-weight:850;color:#475569;margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em;}
+    .single-major-select-v32{width:100%;height:38px;border-radius:10px;border:1px solid #cbd5e1;background:#f8fafc;padding:0 10px;font-weight:750;}
+    .button-row-v32{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .last-save-v32{margin-top:6px;font-size:12px;}
+    #majorToolsV25,#majorToolsV26,#scheduleToolsV25,#scheduleToolsV26,.major-tools-v25,.major-tools-v26,.schedule-tools-v25,.schedule-tools-v26{display:none !important;}
+    @media(max-width:780px){#degreeTopToolsV32{grid-template-columns:1fr;max-width:none;}}
+  `;
+  document.head.appendChild(style);
+
+  window.addEventListener('load', async ()=>{
+    makeSingleMajorDropdownV32();
+    ensureTopToolsV32();
+    removeDuplicateRightToolsV32();
+    await setDegreePlanTitleV32();
+    setTimeout(()=>{ makeSingleMajorDropdownV32(); ensureTopToolsV32(); removeDuplicateRightToolsV32(); }, 300);
+    setTimeout(()=>{ makeSingleMajorDropdownV32(); ensureTopToolsV32(); removeDuplicateRightToolsV32(); }, 1000);
+  });
+})();
+
 </script>
 """
 

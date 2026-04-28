@@ -1461,6 +1461,14 @@ BASE_HTML = r"""
     .mini-course-line { display:inline-block; font-size:11px; font-weight:750; color:#0f172a; background:#f8fafc; border:1px solid #e2e8f0; border-radius:999px; padding:2px 6px; margin:2px 3px 2px 0; }
     @media(max-width:900px){.schedule-browser{grid-template-columns:1fr}.schedule-filter-panel{position:static}.schedule-results-grid{grid-template-columns:1fr}}
 
+  
+    /* v24 polish */
+    .autosave-strip { display: none !important; }
+    .compact-degree-settings { grid-template-columns: 1fr !important; }
+    #degreePlanTitle { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.02em; }
+    .right-menu-block.required-heading-v20 + h2,
+    .right-menu-block.required-heading-v20 + h2 + p { display: none !important; }
+
   </style>
 </head>
 <body>
@@ -1626,9 +1634,9 @@ BUILD_CONTENT = r"""
 <div class="builder-page">
   <section class="builder-top">
     <div>
-      <h2>My Schedule Settings</h2>
-      <div class="settings-grid">
-        <input id="scheduleTitle" value="My Four-Year Plan" placeholder="Schedule title">
+      <h2 id="degreePlanTitle">Degree Plan</h2>
+      <div class="settings-grid compact-degree-settings">
+        <input id="scheduleTitle" type="hidden" value="Degree Plan">
         <div class="major-picker-shell">
           <div class="settings-label">Majors</div>
           <select id="scheduleMajor" multiple size="4" onchange="majorChanged()"></select>
@@ -1640,9 +1648,9 @@ BUILD_CONTENT = r"""
         <p class="muted">Checked means fulfilled by assigned Hub Elective cards. Unchecked units are saved as <code>hub_unfulfilled</code>.</p>
         <div id="hubChecklist" class="hub-check-grid"></div>
       </div>
-      <div class="autosave-strip">
+      <div class="autosave-strip" style="display:none;">
         <span class="autosave-dot" id="autosaveDot"></span>
-        <span id="autosaveText">Autosaving degree plan to server when changes happen.</span>
+        <span id="autosaveText"></span>
       </div>
     </div>
   </section>
@@ -3016,6 +3024,95 @@ window.addEventListener('load',()=>{ setTimeout(applyV20Ui, 100); setTimeout(app
 
 window.addEventListener("load", () => { setupBuilder(); applyV19Ui(); setTimeout(applyV19Ui, 250); });
 window.addEventListener("load", () => { setTimeout(applyV20Ui, 400); });
+
+/* v24 cleanup: no autosave, generated title, required heading de-dupe, hub suggestion close */
+(function(){
+  window.SERVER_AUTOSAVE_DISABLED_V24 = true;
+  function currentUserDisplayNameV24() {
+    const u = window.CURRENT_USER;
+    if (!u) return "Student";
+    const raw = u.displayName || u.email || "Student";
+    return String(raw).split("@")[0] || "Student";
+  }
+  window.updateDegreePlanTitleV24 = function() {
+    const name = currentUserDisplayNameV24();
+    const title = `${name}'s Degree Plan`;
+    const h = document.getElementById('degreePlanTitle');
+    const input = document.getElementById('scheduleTitle');
+    if (h) h.textContent = title;
+    if (input) input.value = title;
+    return title;
+  };
+  const oldUpdateHeaderAuthV24 = updateHeaderAuth;
+  updateHeaderAuth = async function() {
+    const result = await oldUpdateHeaderAuthV24();
+    updateDegreePlanTitleV24();
+    return result;
+  };
+  const oldBuildScheduleJsonV24 = buildScheduleJson;
+  buildScheduleJson = function() {
+    updateDegreePlanTitleV24();
+    const schedule = oldBuildScheduleJsonV24();
+    schedule.title = updateDegreePlanTitleV24();
+    return schedule;
+  };
+  const oldRenderScheduleV24 = renderSchedule;
+  renderSchedule = function(schedule) {
+    oldRenderScheduleV24(schedule);
+    updateDegreePlanTitleV24();
+    dedupeRequiredHeadingsV24();
+  };
+  // Disable server autosave. Local draft caching remains active.
+  queueServerAutosaveV20 = function() {};
+  silentSaveScheduleToServerV20 = async function() {};
+  const oldSaveLocalDegreeDraftV24 = saveLocalDegreeDraft;
+  saveLocalDegreeDraft = function() {
+    oldSaveLocalDegreeDraftV24();
+    setupHubChecklist(getUnfulfilledHubUnits());
+  };
+  window.dedupeRequiredHeadingsV24 = function() {
+    const panel = document.getElementById('requiredPanel');
+    if (!panel) return;
+    const menu = panel.querySelector('.required-scroll-menu') || panel;
+    const headingBlocks = [...menu.querySelectorAll('.required-heading-v20')];
+    headingBlocks.slice(1).forEach(h => h.remove());
+    const h2s = [...menu.querySelectorAll('h2')].filter(h => h.textContent.trim() === 'Required Courses');
+    h2s.forEach((h, idx) => {
+      const owner = h.closest('.required-heading-v20');
+      if (idx > 0 && !owner) {
+        const p = h.nextElementSibling;
+        if (p && p.classList.contains('muted')) p.remove();
+        h.remove();
+      }
+    });
+  };
+  const oldRestructureBuilderV24 = restructureBuilderV19;
+  restructureBuilderV19 = function() {
+    oldRestructureBuilderV24();
+    dedupeRequiredHeadingsV24();
+    updateDegreePlanTitleV24();
+  };
+  const oldSuggestSemesterHubCoursesV24 = suggestSemesterHubCourses;
+  suggestSemesterHubCourses = async function() {
+    const box = document.getElementById('semesterHubSuggestions');
+    if (box) { box.style.display = 'block'; box.classList.add('flash-target'); setTimeout(()=>box.classList.remove('flash-target'), 700); }
+    return oldSuggestSemesterHubCoursesV24();
+  };
+  const oldLoadSuggestedHubSectionsV24 = loadSuggestedHubSections;
+  loadSuggestedHubSections = async function(code) {
+    const box = document.getElementById('semesterHubSuggestions');
+    if (box) {
+      box.classList.add('flash-target');
+      box.innerHTML = `<div class="muted">Loaded ${escapeHtml(code)} into section search. Suggestions closed.</div>`;
+    }
+    await oldLoadSuggestedHubSectionsV24(code);
+    if (box) setTimeout(() => { box.style.display = 'none'; box.classList.remove('flash-target'); }, 650);
+    const list = document.getElementById('semesterSectionResults') || document.querySelector('.section-search-list');
+    if (list) list.scrollIntoView({behavior:'smooth', block:'start'});
+  };
+  window.addEventListener('load', () => { updateDegreePlanTitleV24(); dedupeRequiredHeadingsV24(); });
+})();
+
 </script>
 """
 

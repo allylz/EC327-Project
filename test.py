@@ -1236,6 +1236,42 @@ BASE_HTML = r"""
     .course-actions .section-button { display:none !important; }
     @media (max-width:1100px){ .hub-tools-grid{grid-template-columns:1fr;} .builder-workspace{grid-template-columns:1fr !important;} }
 
+
+
+    /* v12 layout + Hub fixes */
+    .builder-workspace {
+      grid-template-columns: minmax(0, 1fr) clamp(340px, 30vw, 520px) !important;
+      gap: 10px !important;
+    }
+    .required-side { padding-right: 0 !important; margin-right: 0 !important; }
+    .required-bank { padding: 10px !important; margin-right: 0 !important; }
+    .required-group {
+      grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)) !important;
+      gap: 7px !important;
+    }
+    .required-bank .course-card { min-height: 82px !important; padding: 8px !important; }
+    .required-bank .course-card .sublabel-text,
+    .required-group .course-card .detail {
+      font-size: 14px !important;
+      line-height: 1.28 !important;
+      color: #334155 !important;
+    }
+    .hub-track-item.done {
+      border-color: #bbf7d0 !important;
+      background: #f0fdf4 !important;
+      color: #166534 !important;
+    }
+    .hub-track-item.missing {
+      border-color: #fecaca !important;
+      background: #fff7f7 !important;
+      color: #991b1b !important;
+    }
+    .hub-track-item input:disabled { opacity: 1; accent-color: #16a34a; }
+    @media (min-width: 1500px) {
+      .builder-workspace { grid-template-columns: minmax(0, 1fr) clamp(420px, 34vw, 680px) !important; }
+      .required-group { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)) !important; }
+    }
+
 </style>
 </head>
 <body>
@@ -1408,8 +1444,8 @@ BUILD_CONTENT = r"""
       </div>
       <textarea id="scheduleComments" placeholder="Schedule notes">Built in the unified Flask schedule builder.</textarea>
       <div class="hub-check-panel">
-        <h3>Unfulfilled Hub Units</h3>
-        <p class="muted">This updates automatically from Hub units assigned on Hub Elective cards. Saved as <code>hub_unfulfilled</code>.</p>
+        <h3>Hub Unit Tracker</h3>
+        <p class="muted">Checked means fulfilled by assigned Hub Elective cards. Unchecked units are saved as <code>hub_unfulfilled</code>.</p>
         <div id="hubChecklist" class="hub-check-grid"></div>
       </div>
       <div class="button-row">
@@ -1505,13 +1541,14 @@ let nextCardId = 1;
 let HUB_DATA_CACHE = null;
 let ACTIVE_HUB_CARD = null;
 
-function setupHubChecklist(selectedUnits=null) {
+function setupHubChecklist(unfulfilledUnits=null) {
   const box = document.getElementById("hubChecklist");
   if (!box) return;
-  const selected = new Set(selectedUnits || HUB_UNITS);
+  // Checked = fulfilled. Unchecked = still missing and saved in hub_unfulfilled.
+  const unfulfilled = new Set(Array.isArray(unfulfilledUnits) ? unfulfilledUnits : getUnfulfilledHubUnits());
   box.innerHTML = HUB_UNITS.map(unit => `
-    <label>
-      <input type="checkbox" value="${escapeHtml(unit)}" ${selected.has(unit) ? "checked" : ""}>
+    <label class="hub-track-item ${unfulfilled.has(unit) ? "missing" : "done"}">
+      <input type="checkbox" value="${escapeHtml(unit)}" ${unfulfilled.has(unit) ? "" : "checked"} disabled>
       <span>${escapeHtml(unit)}</span>
     </label>
   `).join("");
@@ -1753,9 +1790,10 @@ function loadRequiredPlan() {
       }
       group.appendChild(makeCourseCard({
         course_code: code,
-        comments: comment,
+        comments: "",
         requirement_type: inferType(code),
-        source_term: term
+        source_term: term,
+        sublabel: comment
       }));
       visibleCount += 1;
     });
@@ -1867,6 +1905,7 @@ function makeCourseCard(course) {
   card.dataset.requirementType = baseRequirementTypeFromCourse(course);
   card.dataset.selectedCourse = course.selected_course_code || "";
   card.dataset.sourceTerm = course.source_term || "";
+  card.dataset.sublabel = course.sublabel || "";
   card.dataset.transferred = isTransferred ? "true" : "false";
   card.dataset.status = isTransferred ? "transferred" : (course.status || "planned");
   card.dataset.sections = JSON.stringify(course.selected_sections || []);
@@ -1877,7 +1916,7 @@ function makeCourseCard(course) {
   const hubHtml = makeHubPickerHtml(card);
 
   card.innerHTML = `
-    <div><div class="code">${escapeHtml(card.dataset.code)}</div><div class="detail">${escapeHtml(card.dataset.requirementType || "Course")}</div></div>
+    <div><div class="code">${escapeHtml(card.dataset.code)}</div><div class="detail sublabel-text">${escapeHtml(card.dataset.sublabel || card.dataset.requirementType || "Course")}</div></div>
     <div class="detail"><span class="comment-text">${escapeHtml(card.dataset.comments)}</span><br>Status: <span class="status-text">${escapeHtml(card.dataset.status)}</span>${choiceHtml}${hubHtml}</div>
     <div class="course-actions">
       <label class="completed-toggle" onclick="event.stopPropagation()"><input type="checkbox" ${card.dataset.transferred === "true" ? "checked" : ""} onchange="toggleTransferred(event, this)"> Transferred</label>
@@ -1912,23 +1951,45 @@ function getManualHubUnits(containerId) {
 async function getHubDataObject() {
   if (HUB_DATA_CACHE) return HUB_DATA_CACHE;
   const res = await api("GET", "/api/courses/hub");
-  HUB_DATA_CACHE = res.data || {};
+  let data = res.data?.data || res.data || {};
+  if (typeof data === "string") {
+    try { data = JSON.parse(data); }
+    catch {
+      try { data = JSON.parse("{" + data.replace(/^\s*,?/, "").replace(/,?\s*$/, "") + "}"); }
+      catch { data = {}; }
+    }
+  }
+  HUB_DATA_CACHE = data || {};
   return HUB_DATA_CACHE;
 }
 
 function hubCourseEntriesFromData(data) {
+  if (Array.isArray(data)) {
+    return data.map(item => ({
+      course_code: item.course_code || item.code || "",
+      course_title: item.name || item.course_title || "",
+      hub_areas: Array.isArray(item.hub_areas) ? item.hub_areas : []
+    })).filter(x => x.course_code);
+  }
   return Object.entries(data || {}).map(([code, info]) => ({
     course_code: code,
-    course_title: info?.name || "",
-    hub_areas: info?.hub_areas || []
+    course_title: info?.name || info?.course_title || "",
+    hub_areas: Array.isArray(info?.hub_areas) ? info.hub_areas : []
   }));
+}
+
+function normalizeHubSearchText(text) {
+  return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function hubCourseMatches(entry, query, missing=[]) {
   if (!entry.hub_areas || !entry.hub_areas.length) return false;
-  const q = String(query || "").toLowerCase().trim();
-  const text = `${entry.course_code} ${entry.course_title} ${entry.hub_areas.join(" ")}`.toLowerCase();
-  if (q && !text.includes(q)) return false;
+  const q = normalizeHubSearchText(query);
+  const text = normalizeHubSearchText(`${entry.course_code} ${entry.course_title} ${entry.hub_areas.join(" ")}`);
+  if (q) {
+    const words = q.split(" ").filter(Boolean);
+    if (!words.every(w => text.includes(w))) return false;
+  }
   if (missing.length && !entry.hub_areas.some(h => missing.includes(h))) return false;
   return true;
 }
@@ -2124,6 +2185,7 @@ function buildScheduleJson() {
         selected_sections: safeJson(card.dataset.sections, []),
         hub_units: safeJson(card.dataset.hubUnits, []),
         source_term: card.dataset.sourceTerm || "",
+        sublabel: card.dataset.sublabel || "",
         status: card.dataset.status || "planned",
         transferred: card.dataset.transferred === "true"
       });

@@ -1272,6 +1272,18 @@ BASE_HTML = r"""
       .required-group { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)) !important; }
     }
 
+    /* v14: remove right-side whitespace and make builder truly edge-to-edge */
+    html, body { width: 100%; overflow-x: hidden; }
+    main { max-width: none !important; width: 100% !important; padding-left: 10px !important; padding-right: 10px !important; box-sizing: border-box !important; }
+    .builder-page { width: 100% !important; max-width: none !important; margin-left: 0 !important; margin-right: 0 !important; box-sizing: border-box !important; }
+    .builder-workspace { width: 100% !important; max-width: none !important; padding-right: 0 !important; margin-right: 0 !important; box-sizing: border-box !important; display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(500px, 34vw) !important; gap: 12px !important; align-items: start !important; }
+    .schedule-side { width: 100% !important; min-width: 0 !important; box-sizing: border-box !important; }
+    .required-side { width: 100% !important; max-width: none !important; min-width: 0 !important; margin: 0 !important; padding: 0 !important; justify-self: stretch !important; box-sizing: border-box !important; }
+    .required-bank { width: 100% !important; max-width: none !important; margin: 0 !important; box-sizing: border-box !important; }
+    .required-group { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important; }
+    @media (min-width: 1500px) { .builder-workspace { grid-template-columns: minmax(0, 1fr) minmax(560px, 32vw) !important; } .required-group { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)) !important; } }
+    @media (max-width: 1100px) { .builder-workspace { grid-template-columns: 1fr !important; } .required-side { position: static !important; height: auto !important; } }
+
 </style>
 </head>
 <body>

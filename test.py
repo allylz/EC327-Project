@@ -1034,7 +1034,50 @@ BASE_HTML = r"""
       nav { justify-content: flex-start; }
       .course-card { flex-basis: 260px; width: 260px; max-width: 260px; }
     }
-  </style>
+  
+
+    /* v9 cleaner layout overrides */
+    main { max-width:none; width:100%; padding:18px 22px 40px; }
+    .auth-shell { min-height:calc(100vh - 130px); display:flex; align-items:center; justify-content:center; }
+    .auth-card { width:min(460px,96vw); background:#fff; border:1px solid #e5e7eb; border-radius:18px; padding:28px; box-shadow:0 14px 35px rgba(15,23,42,.08); }
+    .auth-card h2 { margin:0 0 6px; font-size:28px; border:0; padding:0; }
+    .auth-card .muted { font-size:14px; margin-bottom:18px; display:block; }
+    .auth-card input,.auth-card button { height:44px; }
+    .auth-footer { margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+    .auth-footer a { color:#2563eb; text-decoration:none; font-weight:700; }
+    .builder-workspace { display:grid; grid-template-columns:minmax(0,1fr) 390px; gap:18px; align-items:start; }
+    .required-side { position:sticky; top:14px; align-self:start; height:calc(100vh - 28px); overflow:auto; }
+    .required-group-title { font-size:16px !important; font-weight:800; color:#0f172a; margin:12px 0 8px; }
+    .required-group .course-card .detail { font-size:13px !important; }
+    .term-grid { display:flex !important; flex-direction:column; gap:14px; }
+    .term-box { width:100%; min-height:94px; display:flex; flex-wrap:wrap; align-items:flex-start; align-content:flex-start; gap:10px; padding:12px; border:1px solid #dbe4f0; border-radius:14px; background:#fff; }
+    .term-title { width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:16px; border-bottom:1px solid #edf1f7; padding-bottom:8px; margin-bottom:2px; }
+    .term-title-actions { display:flex; gap:6px; align-items:center; }
+    .term-title-actions button { width:auto; padding:5px 9px; font-size:12px; }
+    .course-card { width:275px; min-height:92px; display:grid; grid-template-columns:1fr; gap:8px; border-radius:12px; border:1px solid #d4dde9; background:#fff; box-shadow:0 3px 10px rgba(15,23,42,.06); cursor:grab; }
+    .course-card .code { font-size:14px; font-weight:850; color:#111827; }
+    .course-card .detail { font-size:12px; line-height:1.35; color:#475569; }
+    .course-actions { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+    .course-actions button,.course-actions select { width:auto; }
+    .comment-button { background:#64748b; }
+    .section-button { background:#7c3aed; }
+    .bottom-add-semester { margin-top:14px; display:flex; gap:10px; align-items:center; background:#fff; border:1px dashed #cbd5e1; border-radius:14px; padding:12px; }
+    .bottom-add-semester select,.bottom-add-semester input { margin:0; }
+    .bottom-add-semester button { width:auto; white-space:nowrap; }
+    .modal-backdrop { position:fixed; inset:0; background:rgba(15,23,42,.45); display:none; align-items:center; justify-content:center; z-index:2000; padding:20px; }
+    .modal-backdrop.visible { display:flex; }
+    .modal { width:min(920px,96vw); max-height:88vh; overflow:auto; background:#fff; border-radius:18px; box-shadow:0 30px 80px rgba(0,0,0,.25); padding:22px; }
+    .modal-header { display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom:1px solid #e5e7eb; padding-bottom:10px; margin-bottom:14px; }
+    .section-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:10px; }
+    .section-option { border:1px solid #dbe4f0; border-radius:12px; padding:10px; background:#fff; cursor:pointer; }
+    .section-option:hover { border-color:#2563eb; background:#eff6ff; }
+    .section-option.conflict { border-color:#ef4444; background:#fff1f2; cursor:not-allowed; opacity:.75; }
+    .section-option.selected { border-color:#059669; background:#ecfdf5; }
+    .section-meta { color:#475569; font-size:12px; margin-top:4px; }
+    .hub-picker { border-top:1px solid #edf1f7; padding-top:6px; display:grid; gap:3px; }
+    .hub-picker label { font-size:12px; display:flex; gap:5px; align-items:center; }
+    @media (max-width:1000px){ .builder-workspace{grid-template-columns:1fr;} .required-side{position:relative;height:auto;} }
+</style>
 </head>
 <body>
 <header>
@@ -1166,117 +1209,31 @@ window.addEventListener("load", () => updateHeaderAuth());
 """
 
 LOGIN_CONTENT = r"""
-<div class="grid-2">
-  <div>
-    <section>
-      <h2>Login</h2>
-      <input id="loginEmail" placeholder="email@bu.edu">
-      <input id="loginPassword" type="password" placeholder="password">
-      <button onclick="loginUser()">Login</button>
-      <button class="secondary" onclick="logoutUser()">Logout</button>
-    </section>
-
-    <section>
-      <h2>Register</h2>
-      <input id="registerEmail" placeholder="email@bu.edu">
-      <input id="registerPassword" type="password" placeholder="password">
-      <input id="registerName" placeholder="display name">
-      <button onclick="registerUser()">Register</button>
-
-      <h3>Verify Email</h3>
-      <input id="verifyEmail" placeholder="email@bu.edu">
-      <input id="verifyCode" placeholder="6 digit code">
-      <button onclick="verifyEmail()">Verify</button>
-      <button class="secondary" onclick="resendVerificationCode()">Resend Code</button>
-    </section>
-  </div>
-
-  <div>
-    <section>
-      <h2>Forgot Password</h2>
-      <input id="forgotEmail" placeholder="email@bu.edu">
-      <button onclick="forgotPassword()">Send Reset Code</button>
-
-      <h3>Reset Password</h3>
-      <input id="resetEmail" placeholder="email@bu.edu">
-      <input id="resetCode" placeholder="6 digit reset code">
-      <input id="newPassword" type="password" placeholder="new password">
-      <button class="success" onclick="resetPassword()">Reset Password</button>
-    </section>
-
-  </div>
-</div>
+<div class="auth-shell"><section class="auth-card"><h2>Login</h2><span class="muted">Use your verified BU email to continue.</span><input id="loginEmail" placeholder="email@bu.edu"><input id="loginPassword" type="password" placeholder="password"><button onclick="loginUser()">Login</button><div class="auth-footer"><a href="/register">Create account</a><a href="/forgot">Forgot password?</a><a href="/verify">Verify email</a></div></section></div>
 """
-
+REGISTER_CONTENT = r"""
+<div class="auth-shell"><section class="auth-card"><h2>Register</h2><span class="muted">Create an account with a BU email.</span><input id="registerEmail" placeholder="email@bu.edu"><input id="registerPassword" type="password" placeholder="password"><input id="registerName" placeholder="display name"><button onclick="registerUser()">Register</button><div class="auth-footer"><a href="/login">Already have an account?</a><a href="/verify">Enter verification code</a></div></section></div>
+"""
+VERIFY_CONTENT = r"""
+<div class="auth-shell"><section class="auth-card"><h2>Verify Email</h2><span class="muted">Enter the 6-digit code sent to your BU email.</span><input id="verifyEmail" placeholder="email@bu.edu"><input id="verifyCode" placeholder="6 digit code"><button onclick="verifyEmail()">Verify Email</button><button class="secondary" onclick="resendVerificationCode()">Resend Code</button><div class="auth-footer"><a href="/login">Back to login</a></div></section></div>
+"""
+FORGOT_CONTENT = r"""
+<div class="auth-shell"><section class="auth-card"><h2>Forgot Password</h2><span class="muted">Send a reset code to your BU email.</span><input id="forgotEmail" placeholder="email@bu.edu"><button onclick="forgotPassword()">Send Reset Code</button><div class="auth-footer"><a href="/reset">I have a reset code</a><a href="/login">Back to login</a></div></section></div>
+"""
+RESET_CONTENT = r"""
+<div class="auth-shell"><section class="auth-card"><h2>Reset Password</h2><span class="muted">Enter the code from your email and choose a new password.</span><input id="resetEmail" placeholder="email@bu.edu"><input id="resetCode" placeholder="6 digit reset code"><input id="newPassword" type="password" placeholder="new password"><button class="success" onclick="resetPassword()">Reset Password</button><div class="auth-footer"><a href="/forgot">Send a new code</a><a href="/login">Back to login</a></div></section></div>
+"""
 LOGIN_SCRIPT = r"""
 <script>
-function saveEmailFields() {
-  ["loginEmail","registerEmail","verifyEmail","forgotEmail","resetEmail"].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) localStorage.setItem(id, el.value || "");
-  });
-}
-
-function loadEmailFields() {
-  ["loginEmail","registerEmail","verifyEmail","forgotEmail","resetEmail"].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.value = localStorage.getItem(id) || "";
-    el.addEventListener("input", saveEmailFields);
-  });
-}
-
-async function registerUser() {
-  const email = document.getElementById("registerEmail").value.trim();
-  const password = document.getElementById("registerPassword").value;
-  const displayName = document.getElementById("registerName").value.trim();
-  document.getElementById("verifyEmail").value = email;
-  document.getElementById("loginEmail").value = email;
-  saveEmailFields();
-  await api("POST", "/api/auth/register", { email, password, displayName });
-}
-
-async function resendVerificationCode() {
-  const email = document.getElementById("verifyEmail").value.trim() || document.getElementById("registerEmail").value.trim();
-  await api("POST", "/api/auth/resend-verification-code", { email });
-}
-
-async function verifyEmail() {
-  await api("POST", "/api/auth/verify-email", {
-    email: document.getElementById("verifyEmail").value.trim(),
-    code: document.getElementById("verifyCode").value.trim()
-  });
-}
-
-async function loginUser() {
-  saveEmailFields();
-  const result = await api("POST", "/api/auth/login", {
-    email: document.getElementById("loginEmail").value.trim(),
-    password: document.getElementById("loginPassword").value
-  });
-  if (result.status === 200) setTimeout(() => { window.location.href = "/build"; }, 500);
-}
-
-async function logoutUser() {
-  await logoutFromNav();
-}
-
-async function forgotPassword() {
-  const email = document.getElementById("forgotEmail").value.trim();
-  document.getElementById("resetEmail").value = email;
-  saveEmailFields();
-  await api("POST", "/api/auth/forgot-password", { email });
-}
-
-async function resetPassword() {
-  await api("POST", "/api/auth/reset-password", {
-    email: document.getElementById("resetEmail").value.trim(),
-    code: document.getElementById("resetCode").value.trim(),
-    newPassword: document.getElementById("newPassword").value
-  });
-}
-
-window.addEventListener("load", loadEmailFields);
+function saveEmailFields(){["loginEmail","registerEmail","verifyEmail","forgotEmail","resetEmail"].forEach(id=>{const el=document.getElementById(id); if(el)localStorage.setItem(id,el.value||"");});}
+function loadEmailFields(){["loginEmail","registerEmail","verifyEmail","forgotEmail","resetEmail"].forEach(id=>{const el=document.getElementById(id); if(!el)return; el.value=localStorage.getItem(id)||""; el.addEventListener("input",saveEmailFields);});}
+async function registerUser(){const email=document.getElementById("registerEmail").value.trim(); const password=document.getElementById("registerPassword").value; const displayName=document.getElementById("registerName").value.trim(); localStorage.setItem("verifyEmail",email); localStorage.setItem("loginEmail",email); const r=await api("POST","/api/auth/register",{email,password,displayName}); if(r.status<400)setTimeout(()=>location.href="/verify",650);}
+async function resendVerificationCode(){const email=(document.getElementById("verifyEmail")?.value||localStorage.getItem("verifyEmail")||"").trim(); await api("POST","/api/auth/resend-verification-code",{email});}
+async function verifyEmail(){const r=await api("POST","/api/auth/verify-email",{email:document.getElementById("verifyEmail").value.trim(),code:document.getElementById("verifyCode").value.trim()}); if(r.status<400)setTimeout(()=>location.href="/login",650);}
+async function loginUser(){saveEmailFields(); const r=await api("POST","/api/auth/login",{email:document.getElementById("loginEmail").value.trim(),password:document.getElementById("loginPassword").value}); if(r.status===200)setTimeout(()=>location.href="/build",500);}
+async function forgotPassword(){const email=document.getElementById("forgotEmail").value.trim(); localStorage.setItem("resetEmail",email); const r=await api("POST","/api/auth/forgot-password",{email}); if(r.status<400)setTimeout(()=>location.href="/reset",650);}
+async function resetPassword(){const r=await api("POST","/api/auth/reset-password",{email:document.getElementById("resetEmail").value.trim(),code:document.getElementById("resetCode").value.trim(),newPassword:document.getElementById("newPassword").value}); if(r.status<400)setTimeout(()=>location.href="/login",650);}
+window.addEventListener("load",loadEmailFields);
 </script>
 """
 
@@ -1287,12 +1244,12 @@ BUILD_CONTENT = r"""
       <h2>My Schedule Settings</h2>
       <div class="settings-grid">
         <input id="scheduleTitle" value="My Four-Year Plan" placeholder="Schedule title">
-        <select id="scheduleMajor" onchange="majorChanged()"></select>
+        <select id="scheduleMajor" multiple size="4" onchange="majorChanged()"></select>
       </div>
       <textarea id="scheduleComments" placeholder="Schedule notes">Built in the unified Flask schedule builder.</textarea>
       <div class="hub-check-panel">
         <h3>Unfulfilled Hub Units</h3>
-        <p class="muted">Check the Hub units this plan still needs. Saved as <code>hub_unfulfilled</code>.</p>
+        <p class="muted">This updates automatically from Hub units assigned on Hub Elective cards. Saved as <code>hub_unfulfilled</code>.</p>
         <div id="hubChecklist" class="hub-check-grid"></div>
       </div>
       <div class="button-row">
@@ -1342,19 +1299,12 @@ BUILD_CONTENT = r"""
         <div id="coursePalette" class="term-box palette-box" ondrop="dropCourse(event)" ondragover="allowDrop(event)"></div>
       </section>
 
-      <section class="compact-section">
-        <h2>Semester Controls</h2>
-        <div class="semester-control-row">
-          <select id="newTermLabel"></select>
-          <input id="newTermCustom" placeholder="Optional custom label, e.g. Fifth Year Fall">
-          <button onclick="addTermBox()">Add Semester Box</button>
-        </div>
-        <p class="muted">Only cards placed in semester boxes are saved. The right-side required list hides courses already placed.</p>
-      </section>
+      
 
       <section class="compact-section">
         <h2>My Schedule Builder</h2>
         <div id="termGrid" class="term-grid"></div>
+        <div class="bottom-add-semester"><select id="newTermLabel"></select><input id="newTermCustom" placeholder="Custom semester label"><button onclick="addTermBox()">Add Semester</button></div>
       </section>
 
     </div>
@@ -1369,6 +1319,8 @@ BUILD_CONTENT = r"""
     </aside>
   </div>
 </div>
+<div id="commentModal" class="modal-backdrop"><div class="modal"><div class="modal-header"><h2 id="commentModalTitle">Course Comments</h2><button class="secondary" onclick="closeModal('commentModal')">Close</button></div><textarea id="commentModalText" placeholder="Your comment for this course"></textarea><button onclick="saveModalComment()">Save Comment to This Card</button><h3>Other students' comments</h3><div id="otherStudentComments" class="scrollbox"></div></div></div>
+<div id="sectionModal" class="modal-backdrop"><div class="modal"><div class="modal-header"><h2 id="sectionModalTitle">Pick Sections</h2><button class="secondary" onclick="closeModal('sectionModal')">Close</button></div><p class="muted">Pick lecture/discussion/lab sections. Conflicts are disabled. Selected sections are stored on the course card.</p><div id="sectionList" class="section-list"></div><h3>Hub course suggestions</h3><button class="secondary" onclick="suggestHubCoursesForCurrentTerm()">Suggest 100-200 level Hub courses for missing units</button><div id="hubSuggestionList" class="section-list"></div></div></div>
 """
 
 BUILD_SCRIPT = r"""
@@ -1388,7 +1340,11 @@ function setupHubChecklist(selectedUnits=null) {
 }
 
 function getUnfulfilledHubUnits() {
-  return [...document.querySelectorAll("#hubChecklist input:checked")].map(cb => cb.value);
+  const fulfilled = new Set();
+  document.querySelectorAll(".course-card").forEach(card => {
+    try { JSON.parse(card.dataset.hubUnits || "[]").forEach(u => fulfilled.add(u)); } catch {}
+  });
+  return HUB_UNITS.filter(u => !fulfilled.has(u));
 }
 
 function toggleRequiredPanel() {
@@ -1401,10 +1357,11 @@ function toggleRequiredPanel() {
 function setupBuilder() {
   const majorSelect = document.getElementById("scheduleMajor");
   majorSelect.innerHTML = "";
-  Object.keys(MAJOR_DATA).forEach(major => {
+  Object.keys(MAJOR_DATA).forEach((major, idx) => {
     const opt = document.createElement("option");
     opt.value = major;
     opt.textContent = major;
+    if (idx === 0) opt.selected = true;
     majorSelect.appendChild(opt);
   });
 
@@ -1420,6 +1377,41 @@ function setupBuilder() {
   ["Freshman Fall","Freshman Spring","Sophomore Fall","Sophomore Spring","Junior Fall","Junior Spring","Senior Fall","Senior Spring"].forEach(t => ensureTermBox(t));
   setupHubChecklist();
   majorChanged();
+}
+
+function getSelectedMajors() {
+  const sel = document.getElementById("scheduleMajor");
+  return [...sel.selectedOptions].map(o => o.value).filter(Boolean);
+}
+
+function getPrimaryMajor() {
+  return getSelectedMajors()[0] || Object.keys(MAJOR_DATA)[0];
+}
+
+function getCombinedDropdowns() {
+  const combined = {};
+  getSelectedMajors().forEach(major => {
+    const d = MAJOR_DATA[major]?.dropdowns || {};
+    Object.entries(d).forEach(([type, list]) => {
+      combined[type] = combined[type] || [];
+      list.forEach(item => { if (!combined[type].includes(item)) combined[type].push(item); });
+    });
+  });
+  return combined;
+}
+
+function getCombinedRequiredPlan() {
+  const combined = {};
+  getSelectedMajors().forEach(major => {
+    const plan = MAJOR_DATA[major]?.required_plan || {};
+    Object.entries(plan).forEach(([term, courses]) => {
+      combined[term] = combined[term] || [];
+      courses.forEach(c => {
+        if (!combined[term].some(x => x[0] === c[0])) combined[term].push(c);
+      });
+    });
+  });
+  return combined;
 }
 
 function majorChanged() {
@@ -1448,10 +1440,9 @@ function refreshCardChoiceDropdowns() {
 }
 
 function updateRequirementDropdown() {
-  const major = document.getElementById("scheduleMajor").value;
   const req = document.getElementById("requirementType");
   req.innerHTML = "";
-  ["Regular Course", "Hub Elective"].concat(Object.keys(MAJOR_DATA[major]?.dropdowns || {})).forEach(type => {
+  ["Regular Course", "Hub Elective"].concat(Object.keys(getCombinedDropdowns())).forEach(type => {
     if ([...req.options].some(o => o.value === type)) return;
     const opt = document.createElement("option");
     opt.value = type;
@@ -1462,37 +1453,19 @@ function updateRequirementDropdown() {
 }
 
 function requirementTypeChanged() {
-  const major = document.getElementById("scheduleMajor").value;
   const type = document.getElementById("requirementType").value;
   const select = document.getElementById("electiveChoiceSelect");
   const hint = document.getElementById("electiveChoiceHint");
-
   select.innerHTML = "";
-
-  const options = (MAJOR_DATA[major]?.dropdowns || {})[type] || [];
-
+  const options = getCombinedDropdowns()[type] || [];
   if (!options.length) {
-    const opt = document.createElement("option");
-    opt.value = "";
-    opt.textContent = "No approved list for this type";
-    select.appendChild(opt);
+    const opt = document.createElement("option"); opt.value=""; opt.textContent="No approved list for this type"; select.appendChild(opt);
     hint.textContent = "No program-sheet option list for this type. Use the manual course code box.";
     return;
   }
-
-  const blank = document.createElement("option");
-  blank.value = "";
-  blank.textContent = `Select ${type}...`;
-  select.appendChild(blank);
-
+  const blank = document.createElement("option"); blank.value=""; blank.textContent=`Select ${type}...`; select.appendChild(blank);
   hint.textContent = `${options.length} approved option(s) loaded for ${type}. Select one from the dropdown.`;
-
-  options.forEach(o => {
-    const opt = document.createElement("option");
-    opt.value = o;
-    opt.textContent = o;
-    select.appendChild(opt);
-  });
+  options.forEach(o => { const opt=document.createElement("option"); opt.value=o; opt.textContent=o; select.appendChild(opt); });
 }
 
 function electiveChoiceChanged() {
@@ -1524,8 +1497,16 @@ function ensureTermBox(termName, special=false) {
   box.dataset.term = termName;
   box.ondragover = allowDrop;
   box.ondrop = dropCourse;
-  box.innerHTML = `<div class="term-title"><span>${escapeHtml(termName)}</span><button class="small danger" onclick="removeTermBox(event, this)">Remove</button></div>`;
+  box.innerHTML = `<div class="term-title"><span>${escapeHtml(termName)}</span><div class="term-title-actions"><button class="small secondary" onclick="moveTermBox(event, this, -1)">↑</button><button class="small secondary" onclick="moveTermBox(event, this, 1)">↓</button><button class="small danger" onclick="removeTermBox(event, this)">Remove</button></div></div>`;
   grid.appendChild(box);
+}
+
+function moveTermBox(event, button, dir) {
+  event.stopPropagation();
+  const box = button.closest(".term-box");
+  if (!box) return;
+  if (dir < 0 && box.previousElementSibling) box.parentNode.insertBefore(box, box.previousElementSibling);
+  if (dir > 0 && box.nextElementSibling) box.parentNode.insertBefore(box.nextElementSibling, box);
 }
 
 function removeTermBox(event, button) {
@@ -1549,8 +1530,7 @@ function addTermBox() {
 }
 
 function loadRequiredPlan() {
-  const major = document.getElementById("scheduleMajor").value;
-  const plan = MAJOR_DATA[major]?.required_plan || {};
+  const plan = getCombinedRequiredPlan();
   const bank = document.getElementById("requiredCourseBank");
   if (!bank) return;
 
@@ -1633,9 +1613,8 @@ function baseRequirementTypeFromCourse(course) {
 }
 
 function optionListForType(type) {
-  const major = document.getElementById("scheduleMajor")?.value || Object.keys(MAJOR_DATA)[0];
   if (type === "Hub Elective") return [];
-  return (MAJOR_DATA[major]?.dropdowns || {})[type] || [];
+  return getCombinedDropdowns()[type] || [];
 }
 
 function makeCardChoiceHtml(cardId, type, selectedValue) {
@@ -1692,30 +1671,39 @@ function makeCourseCard(course) {
   card.dataset.sourceTerm = course.source_term || "";
   card.dataset.transferred = isTransferred ? "true" : "false";
   card.dataset.status = isTransferred ? "transferred" : (course.status || "planned");
+  card.dataset.sections = JSON.stringify(course.selected_sections || []);
+  card.dataset.hubUnits = JSON.stringify(course.hub_units || course.hub_areas || []);
 
   const choiceValue = course.comments || "";
   const choiceHtml = makeCardChoiceHtml(card.id, card.dataset.requirementType, choiceValue);
+  const hubHtml = makeHubPickerHtml(card);
 
   card.innerHTML = `
-    <div>
-      <div class="code">${escapeHtml(card.dataset.code)}</div>
-      <div class="detail">${escapeHtml(card.dataset.requirementType || "Course")}</div>
-    </div>
-    <div class="detail">
-      <span class="comment-text">${escapeHtml(card.dataset.comments)}</span><br>
-      Status: <span class="status-text">${escapeHtml(card.dataset.status)}</span>
-      ${choiceHtml}
-    </div>
+    <div><div class="code">${escapeHtml(card.dataset.code)}</div><div class="detail">${escapeHtml(card.dataset.requirementType || "Course")}</div></div>
+    <div class="detail"><span class="comment-text">${escapeHtml(card.dataset.comments)}</span><br>Status: <span class="status-text">${escapeHtml(card.dataset.status)}</span>${choiceHtml}${hubHtml}</div>
     <div class="course-actions">
-      <label class="completed-toggle" onclick="event.stopPropagation()">
-        <input type="checkbox" ${card.dataset.transferred === "true" ? "checked" : ""} onchange="toggleTransferred(event, this)">
-        Transferred
-      </label>
+      <label class="completed-toggle" onclick="event.stopPropagation()"><input type="checkbox" ${card.dataset.transferred === "true" ? "checked" : ""} onchange="toggleTransferred(event, this)"> Transferred</label>
+      <button class="small section-button" onclick="openSectionPicker(event, this)">Sections</button>
+      <button class="small comment-button" onclick="openCommentModal(event, this)">Comments</button>
       <button class="small success" onclick="markTransferred(event, this)">Transfer</button>
       <button class="small danger" onclick="removeCard(event, this)">Remove</button>
-    </div>
-  `;
+    </div>`;
   return card;
+}
+
+function makeHubPickerHtml(card) {
+  const code = String(card.dataset.code || "");
+  if (!code.includes("Hub Elective")) return "";
+  let assigned = []; try { assigned = JSON.parse(card.dataset.hubUnits || "[]"); } catch {}
+  return `<div class="hub-picker"><b>Hub units fulfilled</b>${HUB_UNITS.map(unit => `<label onclick="event.stopPropagation()"><input type="checkbox" value="${escapeHtml(unit)}" ${assigned.includes(unit) ? "checked" : ""} onchange="hubCardChanged(event, this)"> ${escapeHtml(unit)}</label>`).join("")}</div>`;
+}
+
+function hubCardChanged(event, checkbox) {
+  event.stopPropagation();
+  const card = checkbox.closest(".course-card");
+  const units = [...card.querySelectorAll(".hub-picker input:checked")].map(cb => cb.value);
+  card.dataset.hubUnits = JSON.stringify(units);
+  setupHubChecklist(getUnfulfilledHubUnits());
 }
 
 function addManualCourse() {
@@ -1795,7 +1783,8 @@ function dropCourse(event) {
 
 function buildScheduleJson() {
   const title = document.getElementById("scheduleTitle").value.trim();
-  const major = document.getElementById("scheduleMajor").value;
+  const majors = getSelectedMajors();
+  const major = majors[0] || "";
   const comments = document.getElementById("scheduleComments").value.trim();
   const terms = {};
 
@@ -1809,6 +1798,8 @@ function buildScheduleJson() {
         comments: card.dataset.comments || "",
         requirement_type: card.dataset.requirementType || "",
         selected_course_code: card.dataset.selectedCourse || "",
+        selected_sections: safeJson(card.dataset.sections, []),
+        hub_units: safeJson(card.dataset.hubUnits, []),
         source_term: card.dataset.sourceTerm || "",
         status: card.dataset.status || "planned",
         transferred: card.dataset.transferred === "true"
@@ -1816,7 +1807,7 @@ function buildScheduleJson() {
     });
   });
 
-  return { title, major, comments, hub_unfulfilled: getUnfulfilledHubUnits(), terms };
+  return { title, major, majors, comments, hub_unfulfilled: getUnfulfilledHubUnits(), terms };
 }
 
 function previewSchedule() {
@@ -1839,7 +1830,9 @@ async function loadMySchedule() {
 
 function renderSchedule(schedule) {
   document.getElementById("scheduleTitle").value = schedule.title || "";
-  document.getElementById("scheduleMajor").value = schedule.major || Object.keys(MAJOR_DATA)[0];
+  const majorSelect = document.getElementById("scheduleMajor");
+  const savedMajors = Array.isArray(schedule.majors) && schedule.majors.length ? schedule.majors : [schedule.major || Object.keys(MAJOR_DATA)[0]];
+  [...majorSelect.options].forEach(opt => opt.selected = savedMajors.includes(opt.value));
   document.getElementById("scheduleComments").value = schedule.comments || "";
   updateRequirementDropdown();
   setupHubChecklist(schedule.hub_unfulfilled || HUB_UNITS);
@@ -1875,7 +1868,8 @@ async function searchCourses() {
     div.onclick = () => document.getElementById("coursePalette").appendChild(makeCourseCard({
       course_code: code,
       comments: title,
-      requirement_type: "Searched Course"
+      requirement_type: "Searched Course",
+      hub_areas: course.hub?.hub_areas || []
     }));
     container.appendChild(div);
   });
@@ -1893,6 +1887,22 @@ function escapeHtml(str) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
+
+function safeJson(value, fallback) { try { return JSON.parse(value || ""); } catch { return fallback; } }
+let COMMENT_CARD = null; let SECTION_CARD = null;
+function closeModal(id) { document.getElementById(id).classList.remove("visible"); }
+async function openCommentModal(event, button) { event.stopPropagation(); COMMENT_CARD = button.closest(".course-card"); const code = COMMENT_CARD.dataset.code || ""; document.getElementById("commentModalTitle").textContent = `Comments for ${code}`; document.getElementById("commentModalText").value = COMMENT_CARD.dataset.comments || ""; document.getElementById("commentModal").classList.add("visible"); await loadOtherStudentComments(code); }
+function saveModalComment() { if (!COMMENT_CARD) return; const text = document.getElementById("commentModalText").value.trim(); COMMENT_CARD.dataset.comments = text; const el = COMMENT_CARD.querySelector(".comment-text"); if (el) el.textContent = text; closeModal("commentModal"); showToast("Comment saved to card."); }
+async function loadOtherStudentComments(code) { const box = document.getElementById("otherStudentComments"); box.innerHTML = `<div class="muted">Loading...</div>`; const result = await api("GET", "/api/schedules"); const schedules = Array.isArray(result.data) ? result.data : []; const key = requirementKeyFromCode(code); const comments = []; schedules.forEach(s => { Object.entries(s.terms || {}).forEach(([term, courses]) => { (courses || []).forEach(c => { if (requirementKeyFromCode(c.course_code || "") === key && c.comments) comments.push({ who: s.creator?.displayName || s.creator?.email || "Student", term, text: c.comments }); }); }); }); if (!comments.length) { box.innerHTML = `<div class="muted">No other comments found yet.</div>`; return; } box.innerHTML = comments.slice(0, 30).map(c => `<div class="section-option"><b>${escapeHtml(c.who)}</b> <span class="muted">${escapeHtml(c.term)}</span><br>${escapeHtml(c.text)}</div>`).join(""); }
+async function openSectionPicker(event, button) { event.stopPropagation(); SECTION_CARD = button.closest(".course-card"); const code = extractActualCourseCode(SECTION_CARD.dataset.code || ""); document.getElementById("sectionModalTitle").textContent = `Sections for ${code}`; document.getElementById("sectionModal").classList.add("visible"); const list = document.getElementById("sectionList"); list.innerHTML = `<div class="muted">Loading sections...</div>`; if (!code || code.includes("Elective")) { list.innerHTML = `<div class="muted">Pick a concrete course code first.</div>`; return; } const result = await api("GET", "/api/courses/" + encodeURIComponent(code)); const sections = result.data?.sections || []; renderSectionOptions(sections); }
+function extractActualCourseCode(code) { const paren = String(code).match(/\(([^)]+)\)/); return (paren ? paren[1] : code).trim(); }
+function renderSectionOptions(sections) { const list = document.getElementById("sectionList"); if (!sections.length) { list.innerHTML = `<div class="muted">No sections found.</div>`; return; } const selected = safeJson(SECTION_CARD.dataset.sections, []); list.innerHTML = ""; sections.forEach(sec => { const div = document.createElement("div"); const selectedAlready = selected.some(s => s.class_nbr === sec.class_nbr); const conflict = !selectedAlready && selected.some(s => sectionsOverlap(s, sec)); div.className = "section-option" + (selectedAlready ? " selected" : "") + (conflict ? " conflict" : ""); div.title = conflict ? "Conflicts with a selected section." : "Click to select/unselect this section."; div.innerHTML = `<b>${escapeHtml(sec.display_title || sec.section_code_title || sec.section || "Section")}</b><div class="section-meta">${escapeHtml(sec.days || "")} ${escapeHtml(sec.start || "")} - ${escapeHtml(sec.end || "")}<br>${escapeHtml(sec.instructor || "")}<br>${escapeHtml(sec.status || "")}</div>`; div.onclick = () => { const current = safeJson(SECTION_CARD.dataset.sections, []); const exists = current.some(s => s.class_nbr === sec.class_nbr); if (exists) SECTION_CARD.dataset.sections = JSON.stringify(current.filter(s => s.class_nbr !== sec.class_nbr)); else { if (current.some(s => sectionsOverlap(s, sec))) { showToast("That section overlaps with another selected section for this course."); return; } current.push(sectionSlim(sec)); SECTION_CARD.dataset.sections = JSON.stringify(current); } renderSectionOptions(sections); }; list.appendChild(div); }); }
+function sectionSlim(sec) { return { class_nbr: sec.class_nbr, section: sec.section, display_title: sec.display_title, section_code_title: sec.section_code_title, days: sec.days, start: sec.start, end: sec.end, instructor: sec.instructor, status: sec.status }; }
+function sectionsOverlap(a,b) { const daysA=expandDays(a.days||""), daysB=expandDays(b.days||""); if (![...daysA].some(d=>daysB.has(d))) return false; const a1=timeToMin(a.start),a2=timeToMin(a.end),b1=timeToMin(b.start),b2=timeToMin(b.end); if ([a1,a2,b1,b2].some(x=>x===null)) return false; return a1 < b2 && b1 < a2; }
+function expandDays(days) { const s=String(days||""); const out=new Set(); [["Mo","Mo"],["Tu","Tu"],["We","We"],["Th","Th"],["Fr","Fr"],["Sa","Sa"],["Su","Su"]].forEach(([t,v])=>{ if(s.includes(t)) out.add(v); }); return out; }
+function timeToMin(t) { const m=String(t||"").trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i); if(!m)return null; let h=Number(m[1]),min=Number(m[2]); const ap=m[3].toLowerCase(); if(ap==="pm"&&h!==12)h+=12; if(ap==="am"&&h===12)h=0; return h*60+min; }
+async function suggestHubCoursesForCurrentTerm() { const target=document.getElementById("hubSuggestionList"); target.innerHTML=`<div class="muted">Searching...</div>`; const missing=getUnfulfilledHubUnits(); const found=[]; for (const unit of missing.slice(0,4)) { const res=await api("GET","/api/courses?hub="+encodeURIComponent(unit)); const courses=res.data?.results||[]; courses.forEach(c=>{ const code=c.course_code||""; const num=Number((code.match(/(\d{3})/)||[])[1]); const hubs=c.hub?.hub_areas||[]; if(num>=100&&num<=299&&hubs.length>=2&&!found.some(x=>x.course_code===code)) found.push(c); }); } if(!found.length){target.innerHTML=`<div class="muted">No 100-200 level multi-Hub suggestions found from current data.</div>`;return;} target.innerHTML=found.slice(0,16).map(c=>`<div class="section-option"><b>${escapeHtml(c.course_code)}</b><div class="section-meta">${escapeHtml(c.course_title||c.hub?.name||"")}<br>${escapeHtml((c.hub?.hub_areas||[]).join(", "))}<br>${escapeHtml(c.days||"")} ${escapeHtml(c.start||"")} - ${escapeHtml(c.end||"")}</div></div>`).join(""); }
 
 window.addEventListener("load", setupBuilder);
 </script>
@@ -2005,6 +2015,22 @@ def root():
 @app.route("/login")
 def login_page():
     return render_page(LOGIN_CONTENT, LOGIN_SCRIPT)
+
+@app.route("/register")
+def register_page():
+    return render_page(REGISTER_CONTENT, LOGIN_SCRIPT)
+
+@app.route("/verify")
+def verify_page():
+    return render_page(VERIFY_CONTENT, LOGIN_SCRIPT)
+
+@app.route("/forgot")
+def forgot_page():
+    return render_page(FORGOT_CONTENT, LOGIN_SCRIPT)
+
+@app.route("/reset")
+def reset_page():
+    return render_page(RESET_CONTENT, LOGIN_SCRIPT)
 
 
 @app.route("/build")

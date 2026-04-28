@@ -202,6 +202,43 @@ function validateScheduleTerms(terms) {
   return null;
 }
 
+function flattenSelectedSections(scheduleId, terms) {
+  const rows = [];
+
+  for (const [term, courses] of Object.entries(terms || {})) {
+    if (!Array.isArray(courses)) continue;
+
+    for (const course of courses) {
+      const selectedSections = Array.isArray(course.selected_sections)
+        ? course.selected_sections
+        : [];
+
+      for (const sec of selectedSections) {
+        if (!sec.class_nbr) continue;
+
+        rows.push({
+          scheduleId,
+          term,
+          courseCode: course.course_code || "",
+          requirementType: course.requirement_type || null,
+          classNbr: String(sec.class_nbr),
+          section: sec.section || null,
+          displayTitle: sec.display_title || null,
+          sectionCodeTitle: sec.section_code_title || null,
+          days: sec.days || null,
+          start: sec.start || null,
+          end: sec.end || null,
+          instructor: sec.instructor || null,
+          status: sec.status || null,
+        });
+      }
+    }
+  }
+
+  return rows;
+}
+
+
 function enrichSchedule(schedule) {
   if (!schedule || !schedule.terms) {
     return schedule;
@@ -1037,7 +1074,9 @@ app.get("/api/schedules/:id", async (req, res) => {
             email: true,
           },
         },
+        selectedSections: true,
       },
+
     });
 
     if (!schedule) {
@@ -1055,7 +1094,8 @@ app.get("/api/schedules/:id", async (req, res) => {
 
 app.post("/api/schedules", requireAuth, async (req, res) => {
   try {
-    const { title, major, comments, terms, hub_unfulfilled } = req.body;
+    const { title, major, majors, comments, terms, hub_unfulfilled } = req.body;
+
 
     if (!title || !terms) {
       return res.status(400).json({
@@ -1081,6 +1121,8 @@ app.post("/api/schedules", requireAuth, async (req, res) => {
         comments: comments || null,
         terms,
         hub_unfulfilled: Array.isArray(hub_unfulfilled) ? hub_unfulfilled : [],
+        majors: Array.isArray(majors) ? majors : [],
+
       },
       create: {
         title,
@@ -1088,9 +1130,24 @@ app.post("/api/schedules", requireAuth, async (req, res) => {
         comments: comments || null,
         terms,
         hub_unfulfilled: Array.isArray(hub_unfulfilled) ? hub_unfulfilled : [],
+        majors: Array.isArray(majors) ? majors : [],
+
         creatorId: req.session.userId,
       },
     });
+    await prisma.scheduleSelectedSection.deleteMany({
+      where: { scheduleId: schedule.id },
+    });
+
+    const sectionRows = flattenSelectedSections(schedule.id, terms);
+
+    if (sectionRows.length > 0) {
+      await prisma.scheduleSelectedSection.createMany({
+        data: sectionRows,
+        skipDuplicates: true,
+      });
+    }
+
 
     res.status(200).json(enrichSchedule(schedule));
   } catch (err) {
@@ -1115,7 +1172,9 @@ app.get("/api/my-schedule", requireAuth, async (req, res) => {
             email: true,
           },
         },
+        selectedSections: true,
       },
+
     });
 
     if (!schedule) {
@@ -1135,7 +1194,8 @@ app.get("/api/my-schedule", requireAuth, async (req, res) => {
 
 app.put("/api/schedules/:id", requireAuth, async (req, res) => {
   try {
-    const { title, major, comments, terms, hub_unfulfilled } = req.body;
+    const { title, major, majors, comments, terms, hub_unfulfilled } = req.body;
+
 
     const schedule = await prisma.schedule.findUnique({
       where: {
@@ -1176,6 +1236,17 @@ app.put("/api/schedules/:id", requireAuth, async (req, res) => {
         terms,
         hub_unfulfilled: Array.isArray(hub_unfulfilled) ? hub_unfulfilled : [],
       },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+          },
+        },
+        selectedSections: true,
+      },
+
     });
     res.json(enrichSchedule(updated));
   } catch (err) {

@@ -1289,7 +1289,9 @@ BASE_HTML = r"""
     .builder-page { width: 100% !important; max-width: none !important; margin: 0 !important; box-sizing: border-box !important; }
     .builder-workspace { display: block !important; width: 100% !important; max-width: none !important; padding-right: calc(var(--required-panel-w) + 14px) !important; margin: 0 !important; box-sizing: border-box !important; }
     .schedule-side { width: 100% !important; max-width: none !important; min-width: 0 !important; box-sizing: border-box !important; }
-    .required-side { position: fixed !important; top: calc(var(--header-h) + 10px) !important; right: 8px !important; width: var(--required-panel-w) !important; max-width: calc(100vw - 58px) !important; height: calc(100vh - var(--header-h) - 18px) !important; margin: 0 !important; padding: 0 !important; z-index: 30 !important; transition: transform 0.24s ease, box-shadow 0.24s ease !important; overflow: visible !important; }
+    /* v16: keep required panel below the Add Course area instead of letting it float above it */
+    :root { --required-top-offset: calc(var(--header-h) + 150px); }
+    .required-side { position: fixed !important; top: var(--required-top-offset) !important; right: 8px !important; width: var(--required-panel-w) !important; max-width: calc(100vw - 58px) !important; height: calc(100vh - var(--required-top-offset) - 12px) !important; margin: 0 !important; padding: 0 !important; z-index: 30 !important; transition: transform 0.24s ease, box-shadow 0.24s ease !important; overflow: visible !important; }
     .required-side.collapsed { transform: translateX(calc(100% - 40px)) !important; }
     .required-toggle { display: block !important; position: absolute !important; left: -38px !important; top: 14px !important; width: 38px !important; min-width: 38px !important; height: 72px !important; border-radius: 10px 0 0 10px !important; padding: 0 !important; font-size: 11px !important; z-index: 31 !important; box-shadow: 0 8px 18px rgba(15,23,42,.13) !important; }
     .required-bank { width: 100% !important; height: 100% !important; max-height: none !important; overflow: auto !important; box-sizing: border-box !important; border-radius: 16px !important; box-shadow: 0 18px 45px rgba(15,23,42,.13) !important; }
@@ -2395,8 +2397,10 @@ SEMESTER_CONTENT = r"""
     <p class="muted">Search for a course, choose exact sections, and build a weekly calendar. This saves locally in your browser immediately, so reloads do not erase your work.</p>
     <div class="semester-controls-slim">
       <input id="semesterName" placeholder="Example: Fall 2026" value="Current Semester" oninput="saveSemesterDraft()">
+      <input id="semesterScheduleTitle" placeholder="Schedule title" value="Current Semester Schedule" oninput="saveSemesterDraft()">
       <button class="secondary" onclick="clearSemesterDraft()">Clear Local Draft</button>
     </div>
+    <textarea id="semesterScheduleComments" placeholder="Schedule comments / notes" oninput="saveSemesterDraft()" style="min-height:64px; margin-top:8px;"></textarea>
     <h3>Search course sections</h3>
     <input id="semesterCourseQuery" placeholder="Example: CAS PY 212 or software" onkeydown="if(event.key==='Enter') searchSemesterCourses()">
     <button onclick="searchSemesterCourses()">Search Sections</button>
@@ -2435,6 +2439,10 @@ function loadSemesterDraft() {
     if (!raw) return;
     const data = JSON.parse(raw);
     document.getElementById("semesterName").value = data.semesterName || "Current Semester";
+    const titleEl = document.getElementById("semesterScheduleTitle");
+    const commentsEl = document.getElementById("semesterScheduleComments");
+    if (titleEl) titleEl.value = data.title || data.semesterTitle || "Current Semester Schedule";
+    if (commentsEl) commentsEl.value = data.comments || data.semesterComments || "";
     SELECTED_SECTIONS = Array.isArray(data.sections) ? data.sections : [];
   } catch (err) { console.warn(err); }
 }
@@ -2442,6 +2450,8 @@ function loadSemesterDraft() {
 function saveSemesterDraft() {
   const data = {
     semesterName: document.getElementById("semesterName")?.value || "Current Semester",
+    title: document.getElementById("semesterScheduleTitle")?.value || "Current Semester Schedule",
+    comments: document.getElementById("semesterScheduleComments")?.value || "",
     sections: SELECTED_SECTIONS,
     savedAt: new Date().toISOString()
   };
@@ -2578,6 +2588,47 @@ function drawSectionEvent(layer, sec, extraClass) {
 function expandDays(days) { const s=String(days||""); const out=[]; [["Mo","Mo"],["Tu","Tu"],["We","We"],["Th","Th"],["Fr","Fr"]].forEach(([token,val])=>{ if(s.includes(token)) out.push(val); }); return out; }
 function timeToMin(t) { const m=String(t||"").trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i); if(!m)return null; let h=Number(m[1]),min=Number(m[2]); const ap=m[3].toLowerCase(); if(ap==="pm"&&h!==12)h+=12; if(ap==="am"&&h===12)h=0; return h*60+min; }
 function sectionsOverlap(a,b) { const daysA=expandDays(a.days||""), daysB=expandDays(b.days||""); if (!daysA.some(d=>daysB.includes(d))) return false; const a1=timeToMin(a.start),a2=timeToMin(a.end),b1=timeToMin(b.start),b2=timeToMin(b.end); if([a1,a2,b1,b2].some(x=>x===null))return false; return a1 < b2 && b1 < a2; }
+
+
+function normalizeHubSearchText(text) {
+  return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function hubFamily(text) {
+  const t = normalizeHubSearchText(text);
+  if (!t) return "";
+  if (t.includes("philosophical")) return "PLM";
+  if (t.includes("aesthetic")) return "AEX";
+  if (t.includes("historical")) return "HCO";
+  if (t.includes("social inquiry")) return "SO";
+  if (t.includes("individual") && (t.includes("community") || t.includes("in community"))) return "IIC";
+  if (t.includes("global citizenship") || t.includes("intercultural")) return "GCI";
+  if (t.includes("ethical")) return "ETR";
+  if (t.includes("writing intensive")) return "WIN";
+  if (t.includes("research") && t.includes("information")) return "RIL";
+  if (t.includes("digital") || t.includes("multimedia")) return "DME";
+  if (t.includes("creativity") || t.includes("innovation")) return "CRI";
+  if (t.includes("teamwork") || t.includes("collaboration")) return "TWC";
+  if (t.includes("critical thinking")) return "CRT";
+  if (t.includes("oral") || t.includes("signed")) return "OSC";
+  return t;
+}
+
+function hubMatchesRequirement(hubArea, requirement) {
+  const hf = hubFamily(hubArea);
+  const rf = hubFamily(requirement);
+  if (!hf || !rf) return false;
+  return hf === rf;
+}
+
+function countMatchingMissingHubAreas(entry, missing=[]) {
+  const areas = entry.hub_areas || [];
+  const matched = new Set();
+  for (const req of missing || []) {
+    if (areas.some(area => hubMatchesRequirement(area, req))) matched.add(hubFamily(req));
+  }
+  return matched.size;
+}
 
 async function getHubDataObjectForSemester() {
   if (window.HUB_DATA_CACHE) return window.HUB_DATA_CACHE;

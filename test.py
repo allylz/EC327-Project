@@ -4047,6 +4047,11 @@ SCHEDULES_CONTENT = r"""
     <h2>Student Schedules</h2>
     <p class="muted">Browse public degree plans by major, student, term, or course.</p>
     <select id="filterMajor"></select>
+    <select id="filterGraduated">
+      <option value="">All graduation statuses</option>
+      <option value="false">Not graduated</option>
+      <option value="true">Graduated</option>
+    </select>
     <input id="filterText" placeholder="Search student, course, term...">
     <button onclick="loadSchedules()">Refresh Schedules</button>
   </aside>
@@ -4085,6 +4090,7 @@ function setupScheduleFilters() {
   });
   document.getElementById('filterText').addEventListener('input', () => loadSchedules(false));
   document.getElementById('filterMajor').addEventListener('change', () => loadSchedules(false));
+  document.getElementById('filterGraduated').addEventListener('change', () => loadSchedules(false));
 }
 let LAST_SCHEDULES=[];
 async function loadSchedules(fetchFresh=true) {
@@ -4103,11 +4109,13 @@ function scheduleMatchesMajor(s, majorFilter){
 function renderSchedules(schedules) {
   const majorFilter = document.getElementById('filterMajor').value.toLowerCase();
   const text = document.getElementById('filterText').value.toLowerCase();
+  const graduatedFilter = document.getElementById('filterGraduated').value;
   const container = document.getElementById('scheduleResults');
   container.innerHTML = '';
   const filtered = schedules.filter(s => {
     const haystack = JSON.stringify(s).toLowerCase();
-    return scheduleMatchesMajor(s, majorFilter) && (!text || haystack.includes(text));
+    const gradOk = !graduatedFilter || String(Boolean(s.graduated)) === graduatedFilter;
+    return scheduleMatchesMajor(s, majorFilter) && gradOk && (!text || haystack.includes(text));
   });
   if (!filtered.length) { container.innerHTML = `<div class="muted">No matching schedules found.</div>`; return; }
   filtered.forEach(s => {
@@ -4137,6 +4145,7 @@ function renderSchedules(schedules) {
       <div class="schedule-meta-row">
         <span class="schedule-meta-pill">${escapeHtml(creator)}</span>
         ${majors.map(m=>`<span class="schedule-meta-pill">${escapeHtml(m)}</span>`).join('')}
+        <span class="schedule-meta-pill">${s.graduated ? 'Graduated' : 'In progress'}</span>
       </div>
       ${s.comments ? `<p class="muted">${escapeHtml(s.comments)}</p>` : ''}
       ${bucketHtml}
@@ -4298,6 +4307,9 @@ BASE_HTML = BASE_HTML.replace("</style>", r'''
 .v28-action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 #v28ActionBox button { margin: 0; }
 #lastSaveTimestampV28 { margin-top: 7px; font-size: 12px; color: #64748b; }
+#v28ActionBox { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+#v28ActionBox .settings-label { display:none !important; }
+.clean-save-load-row { margin-top: 4px; }
 #v28MajorBox .major-checkbox-grid, #v28MajorBox #majorCheckboxGrid {
   display: grid !important;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -4338,8 +4350,7 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
         <div id="v28MajorMount"></div>
       </div>
       <div id="v28ActionBox">
-        <div class="settings-label">Schedule actions</div>
-        <div class="v28-action-row">
+        <div class="v28-action-row clean-save-load-row">
           <button type="button" onclick="saveScheduleV28()">Save</button>
           <button type="button" class="secondary" onclick="loadMyScheduleV28()">Load saved</button>
         </div>
@@ -4751,6 +4762,6 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
 </body>''')
 
 if __name__ == "__main__":
-    print("iteration 30 ;-;")
+    print("31")
     port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", debug=True, port=port)

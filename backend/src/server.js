@@ -1222,7 +1222,6 @@ app.post("/api/schedules", requireAuth, async (req, res) => {
         comments: comments || null,
         terms,
         hub_unfulfilled: Array.isArray(hub_unfulfilled) ? hub_unfulfilled : [],
-        majors: Array.isArray(majors) ? majors : [],
         graduated: Boolean(graduated),
 
       },
@@ -1232,7 +1231,6 @@ app.post("/api/schedules", requireAuth, async (req, res) => {
         comments: comments || null,
         terms,
         hub_unfulfilled: Array.isArray(hub_unfulfilled) ? hub_unfulfilled : [],
-        majors: Array.isArray(majors) ? majors : [],
         graduated: Boolean(graduated),
 
         creatorId: req.session.userId,

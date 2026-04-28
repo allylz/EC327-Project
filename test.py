@@ -2600,43 +2600,70 @@ function restoreLocalDegreeDraftSilently() {
   return false;
 }
 
+function scheduleHasAnyCourses(schedule) {
+  if (!schedule || !schedule.terms) return false;
+  return Object.values(schedule.terms).some(list => Array.isArray(list) && list.length > 0);
+}
+
+function degreeDraftLooksBlank(schedule) {
+  if (!schedule || !schedule.terms) return true;
+  const hasCourses = scheduleHasAnyCourses(schedule);
+  const hasTitle = !!String(schedule.title || "").trim();
+  const hasComments = !!String(schedule.comments || "").trim();
+  const hasMajor = !!(Array.isArray(schedule.majors) ? schedule.majors.length : schedule.major);
+  return !hasCourses && !hasComments && !hasMajor && (!hasTitle || hasTitle === "My Degree Plan");
+}
+
+async function pullDegreeScheduleFromServer({force=false} = {}) {
+  try {
+    const result = await api("GET", "/api/my-schedule", null, { silent: true, skipAuthRefresh: true });
+    const schedule = result.data?.schedule || result.data?.data?.schedule;
+
+    if (!schedule) return null;
+
+    localStorage.setItem("degreeScheduleDraft", JSON.stringify(schedule));
+    localStorage.setItem("degreeScheduleDraftSavedAt", new Date().toISOString());
+    localStorage.setItem("degreeSchedulePulledAt", new Date().toISOString());
+    if (schedule.updatedAt) localStorage.setItem("degreeScheduleServerUpdatedAt", schedule.updatedAt);
+
+    renderSchedule(schedule);
+    showToast(force ? "Reloaded degree plan from server." : "Pulled latest degree plan from server.");
+    return schedule;
+  } catch (err) {
+    console.warn("Could not pull degree schedule from server", err);
+    return null;
+  }
+}
+
 async function autoLoadDegreeScheduleFromCacheOrServer() {
+  // v22 behavior: always try the server on page open when possible.
+  // The old version could keep restoring a blank/outdated local draft and never show saved classes.
+  await updateHeaderAuth();
+
   const meta = getLocalDegreeDraftMeta();
   const hasLocal = !!(meta.draft && meta.draft.terms);
   const localSavedAt = meta.savedAt ? Date.parse(meta.savedAt) : 0;
   const pulledAt = meta.pulledAt ? Date.parse(meta.pulledAt) : 0;
-  const now = Date.now();
-  const maxServerAgeMs = 5 * 60 * 1000;
+  const serverUpdatedAt = meta.serverUpdatedAt ? Date.parse(meta.serverUpdatedAt) : 0;
 
-  if (hasLocal && localSavedAt > pulledAt) {
+  // If the local draft is blank or only contains the default shell, do not let it block server loading.
+  const localIsMeaningful = hasLocal && !degreeDraftLooksBlank(meta.draft);
+  const localHasUnsyncedEdits = localIsMeaningful && localSavedAt > Math.max(pulledAt, serverUpdatedAt || 0);
+
+  if (!localHasUnsyncedEdits) {
+    const serverSchedule = await pullDegreeScheduleFromServer();
+    if (serverSchedule) return;
+  }
+
+  // If server was unavailable and there is a meaningful local draft, use it.
+  if (localIsMeaningful) {
     renderSchedule(meta.draft);
-    showToast("Restored your unsaved local degree-plan draft.");
+    showToast(localHasUnsyncedEdits ? "Restored unsynced local degree-plan draft." : "Loaded local degree-plan draft.");
     return;
   }
 
-  if (hasLocal && pulledAt && now - pulledAt < maxServerAgeMs) {
-    renderSchedule(meta.draft);
-    showToast("Loaded cached degree plan.");
-    return;
-  }
-
-  try {
-    const result = await api("GET", "/api/my-schedule", null, { silent: true });
-    const schedule = result.data?.schedule || result.data?.data?.schedule;
-    if (schedule) {
-      renderSchedule(schedule);
-      localStorage.setItem("degreeScheduleDraft", JSON.stringify(schedule));
-      localStorage.setItem("degreeScheduleDraftSavedAt", new Date().toISOString());
-      localStorage.setItem("degreeSchedulePulledAt", new Date().toISOString());
-      if (schedule.updatedAt) localStorage.setItem("degreeScheduleServerUpdatedAt", schedule.updatedAt);
-      showToast("Pulled latest degree plan from server.");
-      return;
-    }
-  } catch (err) {
-    console.warn("Could not auto-pull degree schedule", err);
-  }
-
-  if (!restoreLocalDegreeDraftSilently()) saveLocalDegreeDraft();
+  // Last resort: save the default empty layout so localStorage exists.
+  saveLocalDegreeDraft();
 }
 
 function bindDegreeDraftAutosave() {
@@ -2667,14 +2694,8 @@ async function saveSchedule() {
 }
 
 async function loadMySchedule() {
-  const result = await api("GET", "/api/my-schedule");
-  const schedule = result.data?.schedule || result.data?.data?.schedule;
-  if (!schedule) { alert("No saved schedule found."); return; }
-  renderSchedule(schedule);
-  localStorage.setItem("degreeScheduleDraft", JSON.stringify(schedule));
-  localStorage.setItem("degreeScheduleDraftSavedAt", new Date().toISOString());
-  localStorage.setItem("degreeSchedulePulledAt", new Date().toISOString());
-  if (schedule.updatedAt) localStorage.setItem("degreeScheduleServerUpdatedAt", schedule.updatedAt);
+  const schedule = await pullDegreeScheduleFromServer({force:true});
+  if (!schedule) alert("No saved schedule found or you are not logged in.");
 }
 
 function renderSchedule(schedule) {

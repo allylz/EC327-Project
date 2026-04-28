@@ -2990,15 +2990,21 @@ function pastelForCourseV20(code){
   let h=0; String(code||'').split('').forEach(ch=>h=(h*31+ch.charCodeAt(0))>>>0);
   return colors[h%colors.length];
 }
-const originalDrawSectionEventV20=drawSectionEvent;
-drawSectionEvent=function(layer, sec, extraClass){
-  const before=layer.children.length;
-  originalDrawSectionEventV20(layer, sec, extraClass);
-  for(let i=before;i<layer.children.length;i++){
-    const ev=layer.children[i];
-    if(!extraClass){ const [bg,border]=pastelForCourseV20(sec.course_code); ev.style.background=bg; ev.style.borderColor=border; }
-  }
-};
+if (typeof drawSectionEvent === 'function') {
+  const originalDrawSectionEventV20 = drawSectionEvent;
+  drawSectionEvent = function(layer, sec, extraClass){
+    const before = layer.children.length;
+    originalDrawSectionEventV20(layer, sec, extraClass);
+    for (let i = before; i < layer.children.length; i++) {
+      const ev = layer.children[i];
+      if (!extraClass) {
+        const [bg, border] = pastelForCourseV20(sec.course_code);
+        ev.style.background = bg;
+        ev.style.borderColor = border;
+      }
+    }
+  };
+}
 function applyV20Ui(){
   restructureBuilderV19();
   classifyAllCourseCardsV20();

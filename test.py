@@ -4275,7 +4275,7 @@ def proxy(path):
 # v28 patch: force visible save/load controls near title and move course comments
 # to backend table endpoints instead of storing comments inside schedule JSON.
 # =============================================================================
-HTML = BASE_HTML.replace("</style>", r'''
+BASE_HTML = BASE_HTML.replace("</style>", r'''
 
 /* v28: visible top controls and cleaner course-comment behavior */
 .builder-top > div { width: 100%; }
@@ -4308,7 +4308,7 @@ HTML = BASE_HTML.replace("</style>", r'''
 @media (max-width: 900px) { #v28TopTools { grid-template-columns: 1fr; } #v28ActionBox { min-width: 0; } }
 </style>''')
 
-HTML = HTML.replace("</body>", r'''
+BASE_HTML = BASE_HTML.replace("</body>", r'''
 <script>
 (function(){
   function niceTime(iso){

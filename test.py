@@ -1284,6 +1284,20 @@ BASE_HTML = r"""
     @media (min-width: 1500px) { .builder-workspace { grid-template-columns: minmax(0, 1fr) minmax(560px, 32vw) !important; } .required-group { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)) !important; } }
     @media (max-width: 1100px) { .builder-workspace { grid-template-columns: 1fr !important; } .required-side { position: static !important; height: auto !important; } }
 
+    /* v15: fixed sliding required-course panel that follows scroll without wasting right space */
+    :root { --required-panel-w: clamp(430px, 31vw, 620px); }
+    .builder-page { width: 100% !important; max-width: none !important; margin: 0 !important; box-sizing: border-box !important; }
+    .builder-workspace { display: block !important; width: 100% !important; max-width: none !important; padding-right: calc(var(--required-panel-w) + 14px) !important; margin: 0 !important; box-sizing: border-box !important; }
+    .schedule-side { width: 100% !important; max-width: none !important; min-width: 0 !important; box-sizing: border-box !important; }
+    .required-side { position: fixed !important; top: calc(var(--header-h) + 10px) !important; right: 8px !important; width: var(--required-panel-w) !important; max-width: calc(100vw - 58px) !important; height: calc(100vh - var(--header-h) - 18px) !important; margin: 0 !important; padding: 0 !important; z-index: 30 !important; transition: transform 0.24s ease, box-shadow 0.24s ease !important; overflow: visible !important; }
+    .required-side.collapsed { transform: translateX(calc(100% - 40px)) !important; }
+    .required-toggle { display: block !important; position: absolute !important; left: -38px !important; top: 14px !important; width: 38px !important; min-width: 38px !important; height: 72px !important; border-radius: 10px 0 0 10px !important; padding: 0 !important; font-size: 11px !important; z-index: 31 !important; box-shadow: 0 8px 18px rgba(15,23,42,.13) !important; }
+    .required-bank { width: 100% !important; height: 100% !important; max-height: none !important; overflow: auto !important; box-sizing: border-box !important; border-radius: 16px !important; box-shadow: 0 18px 45px rgba(15,23,42,.13) !important; }
+    .required-group { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important; gap: 8px !important; align-items: start !important; }
+    .required-bank .course-card { width: 100% !important; max-width: none !important; flex: none !important; }
+    @media (min-width: 1500px) { :root { --required-panel-w: clamp(520px, 30vw, 720px); } .required-group { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)) !important; } }
+    @media (max-width: 1100px) { .builder-workspace { display: block !important; padding-right: 0 !important; } .required-side { position: static !important; width: 100% !important; max-width: none !important; height: auto !important; transform: none !important; margin-top: 14px !important; } .required-toggle { display: none !important; } .required-bank { max-height: none !important; height: auto !important; } }
+
 </style>
 </head>
 <body>

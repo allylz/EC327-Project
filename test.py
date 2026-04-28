@@ -4270,6 +4270,202 @@ def proxy(path):
         }), 500
 
 
+
+# =============================================================================
+# v28 patch: force visible save/load controls near title and move course comments
+# to backend table endpoints instead of storing comments inside schedule JSON.
+# =============================================================================
+HTML = HTML.replace("</style>", r'''
+
+/* v28: visible top controls and cleaner course-comment behavior */
+.builder-top > div { width: 100%; }
+#v28TopTools {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+  margin: 10px 0 12px;
+}
+#v28MajorBox, #v28ActionBox {
+  background: #ffffff;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+#v28ActionBox { min-width: 260px; }
+.v28-action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#v28ActionBox button { margin: 0; }
+#lastSaveTimestampV28 { margin-top: 7px; font-size: 12px; color: #64748b; }
+#v28MajorBox .major-checkbox-grid, #v28MajorBox #majorCheckboxGrid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 6px;
+}
+.course-card .comment-text { display: none !important; }
+#commentModalText { min-height: 110px; }
+@media (max-width: 900px) { #v28TopTools { grid-template-columns: 1fr; } #v28ActionBox { min-width: 0; } }
+</style>''')
+
+HTML = HTML.replace("</body>", r'''
+<script>
+(function(){
+  function niceTime(iso){
+    if(!iso) return 'never';
+    const d = new Date(iso);
+    if(Number.isNaN(d.getTime())) return 'never';
+    return d.toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+  }
+
+  function updateLastSaveLabelV28(){
+    const el = document.getElementById('lastSaveTimestampV28');
+    if(!el) return;
+    const t = localStorage.getItem('degreeScheduleServerSaveAt') || localStorage.getItem('degreeScheduleDraftSavedAt');
+    el.textContent = 'Last save: ' + niceTime(t);
+  }
+  window.updateLastSaveLabelV28 = updateLastSaveLabelV28;
+
+  function ensureVisibleTopToolsV28(){
+    const top = document.querySelector('.builder-top > div');
+    if(!top || document.getElementById('v28TopTools')) return;
+
+    const tools = document.createElement('div');
+    tools.id = 'v28TopTools';
+    tools.innerHTML = `
+      <div id="v28MajorBox">
+        <div class="settings-label">Majors</div>
+        <div id="v28MajorMount"></div>
+      </div>
+      <div id="v28ActionBox">
+        <div class="settings-label">Schedule actions</div>
+        <div class="v28-action-row">
+          <button type="button" onclick="saveScheduleV28()">Save</button>
+          <button type="button" class="secondary" onclick="loadMyScheduleV28()">Load saved</button>
+        </div>
+        <div id="lastSaveTimestampV28">Last save: never</div>
+      </div>
+    `;
+
+    const title = document.getElementById('degreePlanTitle');
+    if(title && title.parentElement) title.insertAdjacentElement('afterend', tools);
+    else top.prepend(tools);
+
+    if(typeof setupMajorCheckboxesV19 === 'function') setupMajorCheckboxesV19();
+    const existingGrid = document.getElementById('majorCheckboxGrid');
+    const mount = document.getElementById('v28MajorMount');
+    if(existingGrid && mount && existingGrid.parentElement !== mount) mount.appendChild(existingGrid);
+    const oldMajorShell = document.querySelector('.major-picker-shell');
+    if(oldMajorShell) oldMajorShell.style.display = 'none';
+
+    updateLastSaveLabelV28();
+  }
+  window.ensureVisibleTopToolsV28 = ensureVisibleTopToolsV28;
+
+  window.saveScheduleV28 = async function(){
+    if(typeof saveSchedule !== 'function') return;
+    const result = await saveSchedule();
+    const now = new Date().toISOString();
+    localStorage.setItem('degreeScheduleServerSaveAt', now);
+    localStorage.setItem('degreeScheduleDraftSavedAt', now);
+    updateLastSaveLabelV28();
+    if(typeof showToast === 'function') showToast('Saved degree plan.');
+    return result;
+  };
+
+  window.loadMyScheduleV28 = async function(){
+    if(typeof loadMySchedule !== 'function') return;
+    const result = await loadMySchedule();
+    updateLastSaveLabelV28();
+    if(typeof showToast === 'function') showToast('Loaded saved degree plan.');
+    return result;
+  };
+
+  function actualCourseCodeForCommentsV28(raw){
+    const s = String(raw || '').trim();
+    const paren = s.match(/\(([A-Z]{2,}\s*[A-Z]{0,3}\s*\d{3}[A-Z]?)\)/i);
+    if(paren) return paren[1].replace(/\s+/g, ' ').toUpperCase();
+    const direct = s.match(/([A-Z]{2,}\s*[A-Z]{0,3}\s*\d{3}[A-Z]?)/i);
+    if(direct) return direct[1].replace(/\s+/g, ' ').toUpperCase();
+    return s;
+  }
+  window.actualCourseCodeForCommentsV28 = actualCourseCodeForCommentsV28;
+
+  async function fetchCourseCommentsV28(code){
+    const clean = actualCourseCodeForCommentsV28(code);
+    const result = await api('GET', '/api/course-comments?course_code=' + encodeURIComponent(clean));
+    if(Array.isArray(result.data)) return result.data;
+    if(Array.isArray(result.data?.comments)) return result.data.comments;
+    if(Array.isArray(result.data?.data?.comments)) return result.data.data.comments;
+    return [];
+  }
+
+  window.openCommentModal = async function(event, button){
+    event.stopPropagation();
+    COMMENT_CARD = button.closest('.course-card');
+    const raw = COMMENT_CARD?.dataset?.code || '';
+    const code = actualCourseCodeForCommentsV28(raw);
+    document.getElementById('commentModalTitle').textContent = `Comments for ${code}`;
+    document.getElementById('commentModalText').value = '';
+    document.getElementById('commentModal').classList.add('visible');
+    await loadOtherStudentComments(code);
+  };
+
+  window.saveModalComment = async function(){
+    if(!COMMENT_CARD) return;
+    const raw = COMMENT_CARD.dataset.code || '';
+    const code = actualCourseCodeForCommentsV28(raw);
+    const body = document.getElementById('commentModalText').value.trim();
+    if(!body){ if(typeof showToast === 'function') showToast('Write a comment first.'); return; }
+    const result = await api('POST', '/api/course-comments', { course_code: code, body });
+    if(result.status >= 200 && result.status < 300){
+      COMMENT_CARD.dataset.commentCount = String(Number(COMMENT_CARD.dataset.commentCount || '0') + 1);
+      const countEl = COMMENT_CARD.querySelector('.comment-count');
+      if(countEl){ const n = Number(COMMENT_CARD.dataset.commentCount || '1'); countEl.textContent = n > 9 ? '9+' : String(n); }
+      document.getElementById('commentModalText').value = '';
+      await loadOtherStudentComments(code);
+      if(typeof showToast === 'function') showToast('Comment saved for ' + code + '.');
+    }
+  };
+
+  window.loadOtherStudentComments = async function(code){
+    const box = document.getElementById('otherStudentComments');
+    if(!box) return;
+    const clean = actualCourseCodeForCommentsV28(code);
+    box.innerHTML = `<div class="muted">Loading comments for ${clean}...</div>`;
+    try{
+      const comments = await fetchCourseCommentsV28(clean);
+      if(!comments.length){ box.innerHTML = `<div class="muted">No course comments yet.</div>`; return; }
+      box.innerHTML = comments.slice(0,50).map(c => {
+        const who = c.creator?.displayName || c.creator?.email || c.author || 'Student';
+        const when = c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '';
+        const text = c.body || c.comment || c.text || '';
+        return `<div class="section-option"><b>${escapeHtml(who)}</b> <span class="muted">${escapeHtml(when)}</span><br>${escapeHtml(text)}</div>`;
+      }).join('');
+    }catch(err){ box.innerHTML = `<div class="muted">Could not load comments.</div>`; }
+  };
+
+  if(typeof buildScheduleJson === 'function'){
+    const previousBuildScheduleJsonV28 = buildScheduleJson;
+    buildScheduleJson = function(){
+      const schedule = previousBuildScheduleJsonV28();
+      Object.values(schedule.terms || {}).forEach(courses => {
+        (courses || []).forEach(c => { delete c.comments; delete c.comment; });
+      });
+      return schedule;
+    };
+  }
+
+  window.addEventListener('load', () => {
+    ensureVisibleTopToolsV28();
+    setTimeout(ensureVisibleTopToolsV28, 200);
+    setTimeout(ensureVisibleTopToolsV28, 900);
+    updateLastSaveLabelV28();
+  });
+})();
+</script>
+</body>''')
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", debug=True, port=port)

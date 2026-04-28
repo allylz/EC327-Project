@@ -3113,6 +3113,113 @@ window.addEventListener("load", () => { setTimeout(applyV20Ui, 400); });
   window.addEventListener('load', () => { updateDegreePlanTitleV24(); dedupeRequiredHeadingsV24(); });
 })();
 
+
+/* v25: put majors + save/load on right; fix generated title; de-dupe required headings */
+(function(){
+  function displayNameV25(){
+    try {
+      const u = (typeof CURRENT_USER !== 'undefined' && CURRENT_USER) ? CURRENT_USER : (window.CURRENT_USER || null);
+      if (!u) return 'Student';
+      const raw = u.displayName || u.email || 'Student';
+      return String(raw).split('@')[0] || 'Student';
+    } catch { return 'Student'; }
+  }
+  window.updateDegreePlanTitleV25 = function(){
+    const title = `${displayNameV25()}'s Degree Plan`;
+    const h = document.getElementById('degreePlanTitle');
+    const input = document.getElementById('scheduleTitle');
+    if (h) h.textContent = title;
+    if (input) input.value = title;
+    return title;
+  };
+  if (typeof updateDegreePlanTitleV24 === 'function') {
+    updateDegreePlanTitleV24 = updateDegreePlanTitleV25;
+  }
+  function dedupeRequiredV25(){
+    const panel = document.getElementById('requiredPanel');
+    if (!panel) return;
+    const menu = panel.querySelector('.required-scroll-menu') || panel;
+    // Remove the original static heading that lives directly inside the required bank.
+    panel.querySelectorAll('.required-bank > h2, .required-bank > p.muted').forEach(el => el.remove());
+    // Keep only one generated Required Courses header.
+    const blocks = [...menu.querySelectorAll('.required-heading-v20')];
+    blocks.forEach((b, i) => { if (i > 0) b.remove(); });
+    // If there are any stray Required Courses h2s not in the generated block, remove them.
+    [...menu.querySelectorAll('h2')].forEach(h => {
+      if (h.textContent.trim() === 'Required Courses' && !h.closest('.required-heading-v20')) {
+        const p = h.nextElementSibling;
+        if (p && p.classList.contains('muted')) p.remove();
+        h.remove();
+      }
+    });
+  }
+  window.dedupeRequiredHeadingsV25 = dedupeRequiredV25;
+  function ensureRightScheduleToolsV25(){
+    const panel = document.getElementById('requiredPanel');
+    if (!panel) return;
+    const menu = (typeof ensureRequiredScrollMenuV20 === 'function') ? ensureRequiredScrollMenuV20() : (panel.querySelector('.required-scroll-menu') || panel);
+    if (!menu) return;
+
+    if (!document.getElementById('scheduleToolsV25')) {
+      const tools = document.createElement('div');
+      tools.id = 'scheduleToolsV25';
+      tools.className = 'right-menu-block schedule-tools-v25';
+      tools.innerHTML = `<h2>Schedule</h2><div class="schedule-action-row-v25"><button onclick="saveSchedule()">Save</button><button class="secondary" onclick="loadMySchedule()">Load</button></div>`;
+      menu.insertBefore(tools, menu.firstChild);
+    }
+
+    const picker = document.querySelector('.major-picker-shell');
+    if (picker && !picker.closest('.major-tools-v25')) {
+      const block = document.getElementById('majorToolsV25') || document.createElement('div');
+      block.id = 'majorToolsV25';
+      block.className = 'right-menu-block major-tools-v25';
+      if (!block.parentElement) {
+        const after = document.getElementById('scheduleToolsV25');
+        menu.insertBefore(block, after ? after.nextSibling : menu.firstChild);
+      }
+      if (!block.querySelector('h2')) block.appendChild(Object.assign(document.createElement('h2'), {textContent:'Majors'}));
+      block.appendChild(picker);
+    }
+    // Make sure checkbox version of the major selector exists and is synced.
+    if (typeof setupMajorCheckboxesV19 === 'function') setupMajorCheckboxesV19();
+    if (typeof syncMajorCheckboxesFromSelectV19 === 'function') syncMajorCheckboxesFromSelectV19();
+    dedupeRequiredV25();
+  }
+  window.ensureRightScheduleToolsV25 = ensureRightScheduleToolsV25;
+
+  const oldUpdateHeaderV25 = updateHeaderAuth;
+  updateHeaderAuth = async function(){
+    const result = await oldUpdateHeaderV25();
+    updateDegreePlanTitleV25();
+    return result;
+  };
+  const oldBuildScheduleJsonV25 = buildScheduleJson;
+  buildScheduleJson = function(){
+    const schedule = oldBuildScheduleJsonV25();
+    schedule.title = updateDegreePlanTitleV25();
+    return schedule;
+  };
+  const oldRenderScheduleV25 = renderSchedule;
+  renderSchedule = function(schedule){
+    oldRenderScheduleV25(schedule);
+    updateDegreePlanTitleV25();
+    setTimeout(()=>{ ensureRightScheduleToolsV25(); dedupeRequiredV25(); }, 0);
+  };
+  if (typeof restructureBuilderV19 === 'function') {
+    const oldRestructureV25 = restructureBuilderV19;
+    restructureBuilderV19 = function(){
+      oldRestructureV25();
+      ensureRightScheduleToolsV25();
+      dedupeRequiredV25();
+      updateDegreePlanTitleV25();
+    };
+  }
+  window.addEventListener('load', () => {
+    setTimeout(async()=>{ await updateHeaderAuth(); ensureRightScheduleToolsV25(); dedupeRequiredV25(); updateDegreePlanTitleV25(); }, 150);
+    setTimeout(()=>{ ensureRightScheduleToolsV25(); dedupeRequiredV25(); updateDegreePlanTitleV25(); }, 650);
+  });
+})();
+
 </script>
 """
 
@@ -3658,6 +3765,38 @@ window.addEventListener("load", () => {
   setTimeout(() => { renderSelectedSections(); renderCalendar(); }, 150);
   window.addEventListener("resize", renderCalendar);
 });
+
+/* v25: hide Hub suggestions immediately after selecting one */
+(function(){
+  if (typeof loadSuggestedHubSections === 'function') {
+    const oldLoadSuggestedHubSectionsV25 = loadSuggestedHubSections;
+    loadSuggestedHubSections = async function(code){
+      const box = document.getElementById('semesterHubSuggestions');
+      if (box) {
+        box.classList.add('flash-target');
+        box.innerHTML = `<div class="muted">Loading ${escapeHtml(code)} into section search...</div>`;
+      }
+      await oldLoadSuggestedHubSectionsV25(code);
+      if (box) {
+        box.classList.remove('flash-target');
+        box.classList.add('closed-after-select');
+        box.style.display = 'none';
+        box.innerHTML = `<div class="muted">Suggestions closed. Click “Suggest Hub Courses” to search again.</div>`;
+      }
+      const results = document.getElementById('semesterSectionResults');
+      if (results) results.scrollIntoView({behavior:'smooth', block:'start'});
+    };
+  }
+  if (typeof suggestSemesterHubCourses === 'function') {
+    const oldSuggestSemesterHubCoursesV25 = suggestSemesterHubCourses;
+    suggestSemesterHubCourses = async function(){
+      const box = document.getElementById('semesterHubSuggestions');
+      if (box) { box.classList.remove('closed-after-select'); box.style.display = 'block'; }
+      return oldSuggestSemesterHubCoursesV25();
+    };
+  }
+})();
+
 </script>
 """
 

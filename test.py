@@ -1982,6 +1982,42 @@ function normalizeHubSearchText(text) {
   return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function hubFamily(text) {
+  const t = normalizeHubSearchText(text);
+  if (!t) return "";
+  if (t.includes("philosophical")) return "PLM";
+  if (t.includes("aesthetic")) return "AEX";
+  if (t.includes("historical")) return "HCO";
+  if (t.includes("social inquiry")) return "SO";
+  if (t.includes("individual") && (t.includes("community") || t.includes("in community"))) return "IIC";
+  if (t.includes("global citizenship") || t.includes("intercultural")) return "GCI";
+  if (t.includes("ethical")) return "ETR";
+  if (t.includes("writing intensive")) return "WIN";
+  if (t.includes("research") && t.includes("information")) return "RIL";
+  if (t.includes("digital") || t.includes("multimedia")) return "DME";
+  if (t.includes("creativity") || t.includes("innovation")) return "CRI";
+  if (t.includes("teamwork") || t.includes("collaboration")) return "TWC";
+  if (t.includes("critical thinking")) return "CRT";
+  if (t.includes("oral") || t.includes("signed")) return "OSC";
+  return t;
+}
+
+function hubMatchesRequirement(hubArea, requirement) {
+  const hf = hubFamily(hubArea);
+  const rf = hubFamily(requirement);
+  if (!hf || !rf) return false;
+  return hf === rf;
+}
+
+function countMatchingMissingHubAreas(entry, missing=[]) {
+  const areas = entry.hub_areas || [];
+  const matched = new Set();
+  for (const req of missing || []) {
+    if (areas.some(area => hubMatchesRequirement(area, req))) matched.add(hubFamily(req));
+  }
+  return matched.size;
+}
+
 function hubCourseMatches(entry, query, missing=[]) {
   if (!entry.hub_areas || !entry.hub_areas.length) return false;
   const q = normalizeHubSearchText(query);
@@ -1990,7 +2026,7 @@ function hubCourseMatches(entry, query, missing=[]) {
     const words = q.split(" ").filter(Boolean);
     if (!words.every(w => text.includes(w))) return false;
   }
-  if (missing.length && !entry.hub_areas.some(h => missing.includes(h))) return false;
+  if (missing.length && countMatchingMissingHubAreas(entry, missing) === 0) return false;
   return true;
 }
 
@@ -2534,13 +2570,13 @@ async function suggestSemesterHubCourses() {
   if (!missing.length) missing = HUB_UNITS;
   const data = await getHubDataObjectForSemester();
   const found = hubEntriesForSemester(data)
-    .filter(c => (c.hub_areas || []).some(h => missing.includes(h)))
+    .map(c => ({ ...c, missingMatches: countMatchingMissingHubAreas(c, missing) }))
     .filter(c => {
       const num = Number((String(c.course_code).match(/(\d{3})/) || [])[1]);
-      return num >= 100 && num <= 299 && (c.hub_areas || []).length >= 2;
+      return num >= 100 && num <= 299 && c.missingMatches >= 2;
     })
-    .sort((a,b) => (b.hub_areas.length - a.hub_areas.length) || a.course_code.localeCompare(b.course_code));
-  if (!found.length) { box.innerHTML = `<div class="muted">No 100–200 level multi-Hub suggestions found in Hub data.</div>`; return; }
+    .sort((a,b) => (b.missingMatches - a.missingMatches) || (b.hub_areas.length - a.hub_areas.length) || a.course_code.localeCompare(b.course_code));
+  if (!found.length) { box.innerHTML = `<div class="muted">No 100–200 level Hub courses matched 2+ of your missing Hub units. Try marking fewer units as fulfilled or search Hub courses manually from the Degree Plan page.</div>`; return; }
   box.innerHTML = found.slice(0,24).map(c => `<div class="section-chip" onclick="loadSuggestedHubSections('${c.course_code.replace(/'/g,"\\'")}')"><b>${escapeHtml(c.course_code)}</b><div class="section-meta">${escapeHtml(c.course_title)}<br>${escapeHtml((c.hub_areas || []).join(", "))}<br><span class="muted">Click to load available sections.</span></div></div>`).join("");
 }
 async function loadSuggestedHubSections(code) {

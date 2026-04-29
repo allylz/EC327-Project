@@ -1696,8 +1696,8 @@ BUILD_CONTENT = r"""
           </div>
         </div>
         <div id="hubOptionPanel" class="hub-option-panel">
-          <h3>Hub Elective Helper</h3>
-          <p class="muted">Pick a course from the Hub dataset, or manually choose the Hub units this placeholder will satisfy.</p>
+          <h3>Hub Units</h3>
+          <p class="muted">Pick a course from the Hub dataset, or manually choose the Hub units this course satisfies.</p>
           <div class="hub-tools-grid">
             <div>
               <label>Search Hub course data</label>
@@ -1705,9 +1705,9 @@ BUILD_CONTENT = r"""
               <div id="hubCourseResults" class="hub-results"><div class="muted" style="padding:8px;">Start typing to search Hub courses.</div></div>
             </div>
             <div>
-              <label>Manual Hub units for this Hub Elective</label>
+              <label>Manual Hub units for this course</label>
               <div id="manualHubUnits" class="hub-check-grid"></div>
-              <p class="muted">If you do not know the course yet, leave the card as “Hub Elective” and just select the units.</p>
+              <p class="muted">Select the Hub units this course satisfies, or leave blank if none.</p>
             </div>
           </div>
         </div>
@@ -1745,7 +1745,7 @@ BUILD_CONTENT = r"""
     </aside>
   </div>
 </div>
-<div id="commentModal" class="modal-backdrop"><div class="modal"><div class="modal-header"><h2 id="commentModalTitle">Course Comments</h2><button class="secondary" onclick="closeModal('commentModal')">Close</button></div><input id="commentModalProfessor" placeholder="Professor name (required)" style="margin-bottom:8px;"><textarea id="commentModalText" placeholder="Your comment for this course"></textarea><button onclick="saveModalComment()">Save Comment to This Card</button><h3>Other students' comments</h3><div id="otherStudentComments" class="scrollbox"></div></div></div>
+<div id="commentModal" class="modal-backdrop"><div class="modal"><div class="modal-header"><h2 id="commentModalTitle">Course Comments</h2><button class="secondary" onclick="closeModal('commentModal')">Close</button></div><textarea id="commentModalText" placeholder="Your comment for this course"></textarea><button onclick="saveModalComment()">Save Comment to This Card</button><h3>Other students' comments</h3><div id="otherStudentComments" class="scrollbox"></div></div></div>
 <div id="hubModal" class="modal-backdrop"><div class="modal"><div class="modal-header"><h2>Choose Hub Course / Units</h2><button class="secondary" onclick="closeModal('hubModal')">Close</button></div><p class="muted">Search the Hub data object from the backend, select a course, or manually assign Hub units.</p><div class="hub-tools-grid"><div><label>Search Hub course</label><input id="modalHubSearch" placeholder="Example: CASAH 225, art, ethical" oninput="searchHubCourseData('modal')"><div id="modalHubResults" class="hub-results"></div></div><div><label>Manual Hub units</label><div id="modalHubUnits" class="hub-check-grid"></div><button onclick="saveHubModalUnits()">Save Hub Units</button></div></div></div></div>
 """
 
@@ -1897,7 +1897,7 @@ function requirementTypeChanged() {
   const select = document.getElementById("electiveChoiceSelect");
   const hint = document.getElementById("electiveChoiceHint");
   const hubPanel = document.getElementById("hubOptionPanel");
-  if (hubPanel) hubPanel.classList.toggle("visible", type === "Hub Elective");
+  if (hubPanel) hubPanel.classList.toggle("visible", true);
 
   select.innerHTML = "";
   if (type === "Hub Elective") {
@@ -2167,8 +2167,9 @@ function makeCourseCard(course) {
 
 function makeHubPickerHtml(card) {
   const code = String(card.dataset.code || "");
-  if (!code.includes("Hub Elective")) return "";
+  const isHubElective = code.includes("Hub Elective");
   let assigned = []; try { assigned = JSON.parse(card.dataset.hubUnits || "[]"); } catch {}
+  if (!isHubElective && !assigned.length) return "";
   const summary = assigned.length ? assigned.join(", ") : "No Hub units assigned yet";
   return `<div class="hub-picker compact"><span class="hub-summary">${escapeHtml(summary)}</span><button class="small secondary" onclick="openHubModal(event, this)">Choose Hub</button></div>`;
 }
@@ -2500,7 +2501,7 @@ function addManualCourse() {
     comments,
     requirement_type: type,
     selected_course_code: selectedCode,
-    hub_units: type === "Hub Elective" ? getManualHubUnits("manualHubUnits") : []
+    hub_units: getManualHubUnits("manualHubUnits")
   }));
 
   document.getElementById("manualCourseCode").value = "";
@@ -4613,7 +4614,6 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
     const code = actualCourseCodeForCommentsV28(raw);
     document.getElementById('commentModalTitle').textContent = `Comments for ${code}`;
     document.getElementById('commentModalText').value = '';
-    document.getElementById('commentModalProfessor').value = '';
     document.getElementById('commentModal').classList.add('visible');
     await loadOtherStudentComments(code);
   };
@@ -4623,16 +4623,13 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
     const raw = COMMENT_CARD.dataset.code || '';
     const code = actualCourseCodeForCommentsV28(raw);
     const body = document.getElementById('commentModalText').value.trim();
-    const professorName = document.getElementById('commentModalProfessor').value.trim();
-    if(!professorName){ if(typeof showToast === 'function') showToast('Please enter the professor name.'); document.getElementById('commentModalProfessor').focus(); return; }
     if(!body){ if(typeof showToast === 'function') showToast('Write a comment first.'); return; }
-    const result = await api('POST', '/api/course-comments', { course_code: code, body, professor_name: professorName });
+    const result = await api('POST', '/api/course-comments', { course_code: code, body });
     if(result.status >= 200 && result.status < 300){
       COMMENT_CARD.dataset.commentCount = String(Number(COMMENT_CARD.dataset.commentCount || '0') + 1);
       const countEl = COMMENT_CARD.querySelector('.comment-count');
       if(countEl){ const n = Number(COMMENT_CARD.dataset.commentCount || '1'); countEl.textContent = n > 9 ? '9+' : String(n); }
       document.getElementById('commentModalText').value = '';
-      document.getElementById('commentModalProfessor').value = '';
       await loadOtherStudentComments(code);
       if(typeof showToast === 'function') showToast('Comment saved for ' + code + '.');
     }
@@ -4650,8 +4647,7 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
         const who = c.creator?.displayName || c.creator?.email || c.author || 'Student';
         const when = c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '';
         const text = c.body || c.comment || c.text || '';
-        const prof = c.professorName ? `<span class="muted"> · Prof. ${escapeHtml(c.professorName)}</span>` : '';
-        return `<div class="section-option"><b>${escapeHtml(who)}</b>${prof} <span class="muted">${escapeHtml(when)}</span><br>${escapeHtml(text)}</div>`;
+        return `<div class="section-option"><b>${escapeHtml(who)}</b> <span class="muted">${escapeHtml(when)}</span><br>${escapeHtml(text)}</div>`;
       }).join('');
     }catch(err){ box.innerHTML = `<div class="muted">Could not load comments.</div>`; }
   };

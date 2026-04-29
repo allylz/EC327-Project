@@ -1696,8 +1696,8 @@ BUILD_CONTENT = r"""
           </div>
         </div>
         <div id="hubOptionPanel" class="hub-option-panel">
-          <h3>Hub Units</h3>
-          <p class="muted">Pick a course from the Hub dataset, or manually choose the Hub units this course satisfies.</p>
+          <h3>Hub Elective Helper</h3>
+          <p class="muted">Pick a course from the Hub dataset, or manually choose the Hub units this placeholder will satisfy.</p>
           <div class="hub-tools-grid">
             <div>
               <label>Search Hub course data</label>
@@ -1705,9 +1705,9 @@ BUILD_CONTENT = r"""
               <div id="hubCourseResults" class="hub-results"><div class="muted" style="padding:8px;">Start typing to search Hub courses.</div></div>
             </div>
             <div>
-              <label>Manual Hub units for this course</label>
+              <label>Manual Hub units for this Hub Elective</label>
               <div id="manualHubUnits" class="hub-check-grid"></div>
-              <p class="muted">Select the Hub units this course satisfies, or leave blank if none.</p>
+              <p class="muted">If you do not know the course yet, leave the card as “Hub Elective” and just select the units.</p>
             </div>
           </div>
         </div>
@@ -1897,7 +1897,7 @@ function requirementTypeChanged() {
   const select = document.getElementById("electiveChoiceSelect");
   const hint = document.getElementById("electiveChoiceHint");
   const hubPanel = document.getElementById("hubOptionPanel");
-  if (hubPanel) hubPanel.classList.toggle("visible", true);
+  if (hubPanel) hubPanel.classList.toggle("visible", type === "Hub Elective");
 
   select.innerHTML = "";
   if (type === "Hub Elective") {
@@ -2167,9 +2167,8 @@ function makeCourseCard(course) {
 
 function makeHubPickerHtml(card) {
   const code = String(card.dataset.code || "");
-  const isHubElective = code.includes("Hub Elective");
+  if (!code.includes("Hub Elective")) return "";
   let assigned = []; try { assigned = JSON.parse(card.dataset.hubUnits || "[]"); } catch {}
-  if (!isHubElective && !assigned.length) return "";
   const summary = assigned.length ? assigned.join(", ") : "No Hub units assigned yet";
   return `<div class="hub-picker compact"><span class="hub-summary">${escapeHtml(summary)}</span><button class="small secondary" onclick="openHubModal(event, this)">Choose Hub</button></div>`;
 }
@@ -2501,7 +2500,7 @@ function addManualCourse() {
     comments,
     requirement_type: type,
     selected_course_code: selectedCode,
-    hub_units: getManualHubUnits("manualHubUnits")
+    hub_units: type === "Hub Elective" ? getManualHubUnits("manualHubUnits") : []
   }));
 
   document.getElementById("manualCourseCode").value = "";
@@ -4626,9 +4625,6 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
     if(!body){ if(typeof showToast === 'function') showToast('Write a comment first.'); return; }
     const result = await api('POST', '/api/course-comments', { course_code: code, body });
     if(result.status >= 200 && result.status < 300){
-      COMMENT_CARD.dataset.commentCount = String(Number(COMMENT_CARD.dataset.commentCount || '0') + 1);
-      const countEl = COMMENT_CARD.querySelector('.comment-count');
-      if(countEl){ const n = Number(COMMENT_CARD.dataset.commentCount || '1'); countEl.textContent = n > 9 ? '9+' : String(n); }
       document.getElementById('commentModalText').value = '';
       await loadOtherStudentComments(code);
       if(typeof showToast === 'function') showToast('Comment saved for ' + code + '.');
@@ -4642,6 +4638,7 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
     box.innerHTML = `<div class="muted">Loading comments for ${clean}...</div>`;
     try{
       const comments = await fetchCourseCommentsV28(clean);
+      if(window.COMMENT_CARD){ const n=comments.length; window.COMMENT_CARD.dataset.commentCount=String(n); const el=window.COMMENT_CARD.querySelector('.comment-count'); if(el) el.textContent=n>9?'9+':String(n); }
       if(!comments.length){ box.innerHTML = `<div class="muted">No course comments yet.</div>`; return; }
       box.innerHTML = comments.slice(0,50).map(c => {
         const who = c.creator?.displayName || c.creator?.email || c.author || 'Student';
@@ -4651,6 +4648,32 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
       }).join('');
     }catch(err){ box.innerHTML = `<div class="muted">Could not load comments.</div>`; }
   };
+
+  async function refreshAllCommentCountsV28(){
+    const cards = document.querySelectorAll('.course-card');
+    const codeToCards = {};
+    cards.forEach(card => {
+      const raw = card.dataset.code || '';
+      const code = actualCourseCodeForCommentsV28(raw);
+      if(!code || !code.match(/[A-Z]{2,}/)) return;
+      if(!codeToCards[code]) codeToCards[code] = [];
+      codeToCards[code].push(card);
+    });
+    const codes = Object.keys(codeToCards);
+    if(!codes.length) return;
+    await Promise.all(codes.map(async code => {
+      try{
+        const comments = await fetchCourseCommentsV28(code);
+        const n = comments.length;
+        codeToCards[code].forEach(card => {
+          card.dataset.commentCount = String(n);
+          const countEl = card.querySelector('.comment-count');
+          if(countEl) countEl.textContent = n > 9 ? '9+' : String(n);
+        });
+      }catch(e){}
+    }));
+  }
+  window.refreshAllCommentCountsV28 = refreshAllCommentCountsV28;
 
   if(typeof buildScheduleJson === 'function'){
     const previousBuildScheduleJsonV28 = buildScheduleJson;
@@ -4668,6 +4691,7 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
     setTimeout(ensureVisibleTopToolsV28, 200);
     setTimeout(ensureVisibleTopToolsV28, 900);
     updateLastSaveLabelV28();
+    setTimeout(refreshAllCommentCountsV28, 1200);
   });
 })();
 </script>

@@ -1745,7 +1745,7 @@ BUILD_CONTENT = r"""
     </aside>
   </div>
 </div>
-<div id="commentModal" class="modal-backdrop"><div class="modal"><div class="modal-header"><h2 id="commentModalTitle">Course Comments</h2><button class="secondary" onclick="closeModal('commentModal')">Close</button></div><textarea id="commentModalText" placeholder="Your comment for this course"></textarea><button onclick="saveModalComment()">Save Comment to This Card</button><h3>Other students' comments</h3><div id="otherStudentComments" class="scrollbox"></div></div></div>
+<div id="commentModal" class="modal-backdrop"><div class="modal"><div class="modal-header"><h2 id="commentModalTitle">Course Comments</h2><button class="secondary" onclick="closeModal('commentModal')">Close</button></div><input id="commentModalProfessor" placeholder="Professor name (required)" style="margin-bottom:8px;"><textarea id="commentModalText" placeholder="Your comment for this course"></textarea><button onclick="saveModalComment()">Save Comment to This Card</button><h3>Other students' comments</h3><div id="otherStudentComments" class="scrollbox"></div></div></div>
 <div id="hubModal" class="modal-backdrop"><div class="modal"><div class="modal-header"><h2>Choose Hub Course / Units</h2><button class="secondary" onclick="closeModal('hubModal')">Close</button></div><p class="muted">Search the Hub data object from the backend, select a course, or manually assign Hub units.</p><div class="hub-tools-grid"><div><label>Search Hub course</label><input id="modalHubSearch" placeholder="Example: CASAH 225, art, ethical" oninput="searchHubCourseData('modal')"><div id="modalHubResults" class="hub-results"></div></div><div><label>Manual Hub units</label><div id="modalHubUnits" class="hub-check-grid"></div><button onclick="saveHubModalUnits()">Save Hub Units</button></div></div></div></div>
 """
 
@@ -4613,6 +4613,7 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
     const code = actualCourseCodeForCommentsV28(raw);
     document.getElementById('commentModalTitle').textContent = `Comments for ${code}`;
     document.getElementById('commentModalText').value = '';
+    document.getElementById('commentModalProfessor').value = '';
     document.getElementById('commentModal').classList.add('visible');
     await loadOtherStudentComments(code);
   };
@@ -4622,10 +4623,13 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
     const raw = COMMENT_CARD.dataset.code || '';
     const code = actualCourseCodeForCommentsV28(raw);
     const body = document.getElementById('commentModalText').value.trim();
+    const professorName = document.getElementById('commentModalProfessor').value.trim();
+    if(!professorName){ if(typeof showToast === 'function') showToast('Please enter the professor name.'); document.getElementById('commentModalProfessor').focus(); return; }
     if(!body){ if(typeof showToast === 'function') showToast('Write a comment first.'); return; }
-    const result = await api('POST', '/api/course-comments', { course_code: code, body });
+    const result = await api('POST', '/api/course-comments', { course_code: code, body, professor_name: professorName });
     if(result.status >= 200 && result.status < 300){
       document.getElementById('commentModalText').value = '';
+      document.getElementById('commentModalProfessor').value = '';
       await loadOtherStudentComments(code);
       if(typeof showToast === 'function') showToast('Comment saved for ' + code + '.');
     }
@@ -4644,7 +4648,8 @@ BASE_HTML = BASE_HTML.replace("</body>", r'''
         const who = c.creator?.displayName || c.creator?.email || c.author || 'Student';
         const when = c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '';
         const text = c.body || c.comment || c.text || '';
-        return `<div class="section-option"><b>${escapeHtml(who)}</b> <span class="muted">${escapeHtml(when)}</span><br>${escapeHtml(text)}</div>`;
+        const prof = c.professorName ? `<span class="muted"> · Prof. ${escapeHtml(c.professorName)}</span>` : '';
+        return `<div class="section-option"><b>${escapeHtml(who)}</b>${prof} <span class="muted">${escapeHtml(when)}</span><br>${escapeHtml(text)}</div>`;
       }).join('');
     }catch(err){ box.innerHTML = `<div class="muted">Could not load comments.</div>`; }
   };
